@@ -323,7 +323,7 @@ export default function AdminDashboard() {
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
               }`}
             >
-              ประวัติการทำรายการ
+              Activity Logs
             </button>
             <button
               onClick={() => setActiveTab('batches')}
@@ -354,7 +354,7 @@ export default function AdminDashboard() {
           <div className="space-y-6">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h2 className="font-semibold text-blue-900 text-lg mb-2">
-                สรุปไก่ตาย-ไก่คัดรุ่น {activeBatch.batch_name}
+                สรุปโรคตาย ไก่คัดรุ่น {activeBatch.batch_name}
               </h2>
               <p className="text-sm text-blue-700">
                 เริ่มวันที่: {format(new Date(activeBatch.start_date), 'dd MMMM yyyy', { locale: th })}
@@ -368,7 +368,7 @@ export default function AdminDashboard() {
                   <tr className="bg-yellow-400 border-b-2 border-black">
                     <th rowSpan={2} className="border border-black px-2 py-2 text-center font-bold">วันที่</th>
                     {[1, 2, 3, 4, 5, 6, 7].map(house => (
-                      <th key={house} colSpan={3} className="border border-black px-2 py-1 text-center font-bold">
+                      <th key={house} colSpan={6} className="border border-black px-2 py-1 text-center font-bold">
                         เล้า {house}
                       </th>
                     ))}
@@ -380,6 +380,9 @@ export default function AdminDashboard() {
                         <th className="border border-black px-1 py-1 text-center font-bold">ตาย</th>
                         <th className="border border-black px-1 py-1 text-center font-bold">คัด</th>
                         <th className="border border-black px-1 py-1 text-center font-bold">รวม</th>
+                        <th className="border border-black px-1 py-1 text-center font-bold">🌡️</th>
+                        <th className="border border-black px-1 py-1 text-center font-bold">💧</th>
+                        <th className="border border-black px-1 py-1 text-center font-bold">💦</th>
                       </React.Fragment>
                     ))}
                   </tr>
@@ -392,6 +395,9 @@ export default function AdminDashboard() {
                       </td>
                       {[1, 2, 3, 4, 5, 6, 7].map(house => {
                         const data = day.houses[house];
+                        const record = records.find(
+                          r => r.house_number === house && r.record_date === day.date
+                        );
                         return (
                           <React.Fragment key={house}>
                             <td className="border border-black px-1 py-1 text-center">
@@ -402,6 +408,15 @@ export default function AdminDashboard() {
                             </td>
                             <td className="border border-black px-1 py-1 text-center font-semibold">
                               {data.total > 0 ? data.total : ''}
+                            </td>
+                            <td className="border border-black px-1 py-1 text-center text-xs">
+                              {record?.outside_temp || '-'}
+                            </td>
+                            <td className="border border-black px-1 py-1 text-center text-xs">
+                              {record?.outside_humidity || '-'}
+                            </td>
+                            <td className="border border-black px-1 py-1 text-center text-xs">
+                              {record?.water_meter || '-'}
                             </td>
                           </React.Fragment>
                         );
@@ -427,6 +442,9 @@ export default function AdminDashboard() {
                           <td className="border border-black px-1 py-2 text-center font-bold">
                             {data.total}
                           </td>
+                          <td colSpan={3} className="border border-black px-1 py-2 text-center text-xs text-gray-400">
+                            -
+                          </td>
                         </React.Fragment>
                       );
                     })}
@@ -437,21 +455,21 @@ export default function AdminDashboard() {
 
                   <tr className="bg-blue-100">
                     <td className="border border-black px-2 py-2 text-center font-bold">รวมตาย</td>
-                    <td colSpan={21} className="border border-black px-2 py-2 text-center font-bold text-red-700">
+                    <td colSpan={42} className="border border-black px-2 py-2 text-center font-bold text-red-700">
                       {grandTotalDead}
                     </td>
                   </tr>
 
                   <tr className="bg-orange-100">
                     <td className="border border-black px-2 py-2 text-center font-bold">รวมคัด</td>
-                    <td colSpan={21} className="border border-black px-2 py-2 text-center font-bold text-orange-700">
+                    <td colSpan={42} className="border border-black px-2 py-2 text-center font-bold text-orange-700">
                       {grandTotalCulled}
                     </td>
                   </tr>
 
                   <tr className="bg-red-200">
                     <td className="border border-black px-2 py-2 text-center font-bold">รวมตาย/คัด</td>
-                    <td colSpan={21} className="border border-black px-2 py-2 text-center font-bold text-lg">
+                    <td colSpan={42} className="border border-black px-2 py-2 text-center font-bold text-lg">
                       {grandTotal}
                     </td>
                   </tr>
@@ -519,7 +537,7 @@ export default function AdminDashboard() {
         {activeTab === 'logs' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-gray-800">ประวัติการทำรายการ</h2>
+              <h2 className="text-xl font-semibold text-gray-800">Activity Logs</h2>
             </div>
 
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
