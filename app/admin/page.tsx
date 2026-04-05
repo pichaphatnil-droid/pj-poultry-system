@@ -380,9 +380,9 @@ export default function AdminDashboard() {
                         <th className="border border-black px-1 py-1 text-center font-bold">ตาย</th>
                         <th className="border border-black px-1 py-1 text-center font-bold">คัด</th>
                         <th className="border border-black px-1 py-1 text-center font-bold">รวม</th>
-                        <th className="border border-black px-1 py-1 text-center font-bold">🌡️</th>
-                        <th className="border border-black px-1 py-1 text-center font-bold">💧</th>
-                        <th className="border border-black px-1 py-1 text-center font-bold">💦</th>
+                        <th className="border border-black px-1 py-1 text-center font-bold text-xs">อุณหภูมิ</th>
+                        <th className="border border-black px-1 py-1 text-center font-bold text-xs">ความชื้น</th>
+                        <th className="border border-black px-1 py-1 text-center font-bold text-xs">น้ำ</th>
                       </React.Fragment>
                     ))}
                   </tr>
