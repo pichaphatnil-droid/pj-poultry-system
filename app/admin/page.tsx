@@ -354,7 +354,7 @@ export default function AdminDashboard() {
           <div className="space-y-6">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h2 className="font-semibold text-blue-900 text-lg mb-2">
-                สรุปโรคตาย ไก่คัดรุ่น {activeBatch.batch_name}
+                สรุปไก่ตาย-ไก่คัดรุ่น {activeBatch.batch_name}
               </h2>
               <p className="text-sm text-blue-700">
                 เริ่มวันที่: {format(new Date(activeBatch.start_date), 'dd MMMM yyyy', { locale: th })}
@@ -368,7 +368,7 @@ export default function AdminDashboard() {
                   <tr className="bg-yellow-400 border-b-2 border-black">
                     <th rowSpan={2} className="border border-black px-2 py-2 text-center font-bold">วันที่</th>
                     {[1, 2, 3, 4, 5, 6, 7].map(house => (
-                      <th key={house} colSpan={6} className="border border-black px-2 py-1 text-center font-bold">
+                      <th key={house} colSpan={7} className="border border-black px-2 py-1 text-center font-bold">
                         เล้า {house}
                       </th>
                     ))}
@@ -380,7 +380,8 @@ export default function AdminDashboard() {
                         <th className="border border-black px-1 py-1 text-center font-bold">ตาย</th>
                         <th className="border border-black px-1 py-1 text-center font-bold">คัด</th>
                         <th className="border border-black px-1 py-1 text-center font-bold">รวม</th>
-                        <th className="border border-black px-1 py-1 text-center font-bold text-xs">อุณหภูมิ</th>
+                        <th className="border border-black px-1 py-1 text-center font-bold text-xs">อุณหภูมินอก</th>
+                        <th className="border border-black px-1 py-1 text-center font-bold text-xs">อุณหภูมิใน</th>
                         <th className="border border-black px-1 py-1 text-center font-bold text-xs">ความชื้น</th>
                         <th className="border border-black px-1 py-1 text-center font-bold text-xs">น้ำ</th>
                       </React.Fragment>
@@ -413,6 +414,9 @@ export default function AdminDashboard() {
                               {record?.morning_temp_outside || '-'}
                             </td>
                             <td className="border border-black px-1 py-1 text-center text-xs">
+                              {record?.morning_temp_inside || '-'}
+                            </td>
+                            <td className="border border-black px-1 py-1 text-center text-xs">
                               {record?.morning_humidity || '-'}
                             </td>
                             <td className="border border-black px-1 py-1 text-center text-xs">
@@ -442,7 +446,7 @@ export default function AdminDashboard() {
                           <td className="border border-black px-1 py-2 text-center font-bold">
                             {data.total}
                           </td>
-                          <td colSpan={3} className="border border-black px-1 py-2 text-center text-xs text-gray-400">
+                          <td colSpan={4} className="border border-black px-1 py-2 text-center text-xs text-gray-400">
                             -
                           </td>
                         </React.Fragment>
@@ -455,21 +459,21 @@ export default function AdminDashboard() {
 
                   <tr className="bg-blue-100">
                     <td className="border border-black px-2 py-2 text-center font-bold">รวมตาย</td>
-                    <td colSpan={42} className="border border-black px-2 py-2 text-center font-bold text-red-700">
+                    <td colSpan={49} className="border border-black px-2 py-2 text-center font-bold text-red-700">
                       {grandTotalDead}
                     </td>
                   </tr>
 
                   <tr className="bg-orange-100">
                     <td className="border border-black px-2 py-2 text-center font-bold">รวมคัด</td>
-                    <td colSpan={42} className="border border-black px-2 py-2 text-center font-bold text-orange-700">
+                    <td colSpan={49} className="border border-black px-2 py-2 text-center font-bold text-orange-700">
                       {grandTotalCulled}
                     </td>
                   </tr>
 
                   <tr className="bg-red-200">
                     <td className="border border-black px-2 py-2 text-center font-bold">รวมตาย/คัด</td>
-                    <td colSpan={42} className="border border-black px-2 py-2 text-center font-bold text-lg">
+                    <td colSpan={49} className="border border-black px-2 py-2 text-center font-bold text-lg">
                       {grandTotal}
                     </td>
                   </tr>
