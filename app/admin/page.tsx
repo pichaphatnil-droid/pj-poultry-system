@@ -410,13 +410,13 @@ export default function AdminDashboard() {
                               {data.total > 0 ? data.total : ''}
                             </td>
                             <td className="border border-black px-1 py-1 text-center text-xs">
-                              {record?.outside_temp || '-'}
+                              {record?.morning_temp_outside || '-'}
                             </td>
                             <td className="border border-black px-1 py-1 text-center text-xs">
-                              {record?.outside_humidity || '-'}
+                              {record?.morning_humidity || '-'}
                             </td>
                             <td className="border border-black px-1 py-1 text-center text-xs">
-                              {record?.water_meter || '-'}
+                              {record?.morning_water_meter || '-'}
                             </td>
                           </React.Fragment>
                         );
