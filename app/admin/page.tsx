@@ -1,13 +1,24 @@
-'use client';
+"use client";
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { getCurrentUser, signOut, supabase } from '../lib/supabase';
-import { getTodayThailand, getNowThailand } from '../lib/dateUtils';
-import type { User, Batch, DailyRecord } from '../types';
-import { format, differenceInDays, addDays } from 'date-fns';
-import { th } from 'date-fns/locale';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { getCurrentUser, signOut, supabase } from "../lib/supabase";
+import { getTodayThailand, getNowThailand } from "../lib/dateUtils";
+import type { User, Batch, DailyRecord } from "../types";
+import { format, differenceInDays, addDays } from "date-fns";
+import { th } from "date-fns/locale";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from "recharts";
 
 interface ActivityLog {
   id: string;
@@ -28,17 +39,19 @@ export default function AdminDashboard() {
   const [records, setRecords] = useState<DailyRecord[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'summary' | 'chart' | 'logs' | 'users' | 'batches'>('summary');
+  const [activeTab, setActiveTab] = useState<
+    "summary" | "chart" | "logs" | "users" | "batches"
+  >("summary");
   const [users, setUsers] = useState<User[]>([]);
   const [showBatchForm, setShowBatchForm] = useState(false);
-  const [newBatchName, setNewBatchName] = useState('');
-  const [newBatchStartDate, setNewBatchStartDate] = useState('');
-  const [newBatchInitialCount, setNewBatchInitialCount] = useState('');
+  const [newBatchName, setNewBatchName] = useState("");
+  const [newBatchStartDate, setNewBatchStartDate] = useState("");
+  const [newBatchInitialCount, setNewBatchInitialCount] = useState("");
 
   useEffect(() => {
     const currentUser = getCurrentUser();
-    if (!currentUser || currentUser.role !== 'admin') {
-      router.push('/');
+    if (!currentUser || currentUser.role !== "admin") {
+      router.push("/");
       return;
     }
     setUser(currentUser);
@@ -48,40 +61,40 @@ export default function AdminDashboard() {
   const loadData = async () => {
     try {
       const { data: batchesData } = await supabase
-        .from('batches')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .from("batches")
+        .select("*")
+        .order("created_at", { ascending: false });
 
       if (batchesData) {
         setAllBatches(batchesData);
-        const active = batchesData.find(b => b.is_active);
+        const active = batchesData.find((b) => b.is_active);
         setActiveBatch(active || null);
 
         if (active) {
           const { data: recordsData } = await supabase
-            .from('daily_records')
-            .select('*')
-            .eq('batch_id', active.id)
-            .order('record_date', { ascending: true });
+            .from("daily_records")
+            .select("*")
+            .eq("batch_id", active.id)
+            .order("record_date", { ascending: true });
           setRecords(recordsData || []);
         }
       }
 
       const { data: usersData } = await supabase
-        .from('users')
-        .select('*')
-        .order('role', { ascending: false })
-        .order('house_number', { ascending: true });
+        .from("users")
+        .select("*")
+        .order("role", { ascending: false })
+        .order("house_number", { ascending: true });
       setUsers(usersData || []);
 
       const { data: logsData } = await supabase
-        .from('activity_logs')
-        .select('*, users(full_name, house_number)')
-        .order('created_at', { ascending: false })
+        .from("activity_logs")
+        .select("*, users(full_name, house_number)")
+        .order("created_at", { ascending: false })
         .limit(100);
       setActivityLogs(logsData || []);
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error("Error loading data:", error);
     } finally {
       setLoading(false);
     }
@@ -89,12 +102,12 @@ export default function AdminDashboard() {
 
   const handleLogout = () => {
     signOut();
-    router.push('/');
+    router.push("/");
   };
 
   const handleCreateBatch = async () => {
     if (!newBatchName || !newBatchStartDate) {
-      alert('กรุณากรอกข้อมูลให้ครบถ้วน');
+      alert("กรุณากรอกข้อมูลให้ครบถ้วน");
       return;
     }
 
@@ -102,13 +115,13 @@ export default function AdminDashboard() {
       // ปิดรุ่นเก่าก่อน
       if (activeBatch) {
         await supabase
-          .from('batches')
+          .from("batches")
           .update({ is_active: false, end_date: getTodayThailand() })
-          .eq('id', activeBatch.id);
+          .eq("id", activeBatch.id);
       }
 
       // สร้างรุ่นใหม่
-      const { error } = await supabase.from('batches').insert({
+      const { error } = await supabase.from("batches").insert({
         batch_name: newBatchName,
         start_date: newBatchStartDate,
         initial_count: parseInt(newBatchInitialCount) || 0,
@@ -118,48 +131,53 @@ export default function AdminDashboard() {
 
       if (error) throw error;
 
-      alert('สร้างรุ่นใหม่สำเร็จ');
+      alert("สร้างรุ่นใหม่สำเร็จ");
       setShowBatchForm(false);
-      setNewBatchName('');
-      setNewBatchStartDate('');
-      setNewBatchInitialCount('');
+      setNewBatchName("");
+      setNewBatchStartDate("");
+      setNewBatchInitialCount("");
       loadData();
     } catch (error: any) {
-      alert('เกิดข้อผิดพลาด: ' + error.message);
+      alert("เกิดข้อผิดพลาด: " + error.message);
     }
   };
 
   const handleCloseBatch = async (batchId: string) => {
-    if (!confirm('ต้องการปิดรุ่นนี้หรือไม่?')) return;
+    if (!confirm("ต้องการปิดรุ่นนี้หรือไม่?")) return;
 
     try {
       await supabase
-        .from('batches')
+        .from("batches")
         .update({ is_active: false, end_date: getTodayThailand() })
-        .eq('id', batchId);
+        .eq("id", batchId);
 
-      alert('ปิดรุ่นสำเร็จ');
+      alert("ปิดรุ่นสำเร็จ");
       loadData();
     } catch (error: any) {
-      alert('เกิดข้อผิดพลาด: ' + error.message);
+      alert("เกิดข้อผิดพลาด: " + error.message);
     }
   };
 
   const handleDeleteBatch = async (batchId: string, batchName: string) => {
-    if (!confirm(`ต้องการลบรุ่น "${batchName}" หรือไม่?\n\n⚠️ ข้อมูลทั้งหมดจะถูกลบและไม่สามารถกู้คืนได้!`)) return;
+    if (
+      !confirm(
+        `ต้องการลบรุ่น "${batchName}" หรือไม่?\n\n⚠️ ข้อมูลทั้งหมดจะถูกลบและไม่สามารถกู้คืนได้!`,
+      )
+    )
+      return;
 
     try {
       const { error } = await supabase
-        .from('batches')
+        .from("batches")
         .delete()
-        .eq('id', batchId);
+        .eq("id", batchId);
 
       if (error) throw error;
 
-      alert('ลบรุ่นสำเร็จ');
+      alert("ลบรุ่นสำเร็จ");
       loadData();
     } catch (error: any) {
-      alert('เกิดข้อผิดพลาด: ' + error.message);
+      alert("เกิดข้อผิดพลาด: " + error.message);
     }
   };
 
@@ -173,12 +191,12 @@ export default function AdminDashboard() {
 
     for (let day = 0; day < days; day++) {
       const currentDate = addDays(startDate, day);
-      const dateStr = format(currentDate, 'yyyy-MM-dd');
+      const dateStr = format(currentDate, "yyyy-MM-dd");
 
       const dayData: any = {
         day: day + 1,
         date: dateStr,
-        dateDisplay: format(currentDate, 'd/M/yyyy'),
+        dateDisplay: format(currentDate, "d/M/yyyy"),
         houses: {},
       };
 
@@ -187,11 +205,13 @@ export default function AdminDashboard() {
 
       for (let house = 1; house <= 7; house++) {
         const record = records.find(
-          r => r.house_number === house && r.record_date === dateStr
+          (r) => r.house_number === house && r.record_date === dateStr,
         );
 
-        const dead = (record?.morning_dead || 0) + (record?.afternoon_dead || 0);
-        const culled = (record?.morning_culled || 0) + (record?.afternoon_culled || 0);
+        const dead =
+          (record?.morning_dead || 0) + (record?.afternoon_dead || 0);
+        const culled =
+          (record?.morning_culled || 0) + (record?.afternoon_culled || 0);
 
         dayData.houses[house] = { dead, culled, total: dead + culled };
         dayTotalDead += dead;
@@ -214,12 +234,16 @@ export default function AdminDashboard() {
       let totalDead = 0;
       let totalCulled = 0;
 
-      summary.forEach(day => {
+      summary.forEach((day) => {
         totalDead += day.houses[house].dead;
         totalCulled += day.houses[house].culled;
       });
 
-      totals[house] = { dead: totalDead, culled: totalCulled, total: totalDead + totalCulled };
+      totals[house] = {
+        dead: totalDead,
+        culled: totalCulled,
+        total: totalDead + totalCulled,
+      };
     }
 
     return totals;
@@ -231,24 +255,24 @@ export default function AdminDashboard() {
     // แสดงเฉพาะวันที่ผ่านมาแล้ว (ไม่รวมวันอนาคต)
     // แต่แสดงทุกวันแม้ยังไม่มีข้อมูล (แสดง 0)
     return dailySummary
-      .filter(day => day.date <= todayDate)
-      .map(day => ({
+      .filter((day) => day.date <= todayDate)
+      .map((day) => ({
         date: day.dateDisplay,
-        'เล้า 1': day.houses[1].total,
-        'เล้า 2': day.houses[2].total,
-        'เล้า 3': day.houses[3].total,
-        'เล้า 4': day.houses[4].total,
-        'เล้า 5': day.houses[5].total,
-        'เล้า 6': day.houses[6].total,
-        'เล้า 7': day.houses[7].total,
+        "เล้า 1": day.houses[1].total,
+        "เล้า 2": day.houses[2].total,
+        "เล้า 3": day.houses[3].total,
+        "เล้า 4": day.houses[4].total,
+        "เล้า 5": day.houses[5].total,
+        "เล้า 6": day.houses[6].total,
+        "เล้า 7": day.houses[7].total,
       }));
   };
 
   const prepareHouseChartData = () => {
     const dailySummary = calculateDailySummary();
     const houseTotals = calculateHouseTotals(dailySummary);
-    
-    return [1, 2, 3, 4, 5, 6, 7].map(house => ({
+
+    return [1, 2, 3, 4, 5, 6, 7].map((house) => ({
       เล้า: `เล้า ${house}`,
       ตาย: houseTotals[house].dead,
       คัด: houseTotals[house].culled,
@@ -269,8 +293,14 @@ export default function AdminDashboard() {
 
   const dailySummary = calculateDailySummary();
   const houseTotals = calculateHouseTotals(dailySummary);
-  const grandTotalDead = Object.values(houseTotals).reduce((sum: number, h: any) => sum + h.dead, 0);
-  const grandTotalCulled = Object.values(houseTotals).reduce((sum: number, h: any) => sum + h.culled, 0);
+  const grandTotalDead = Object.values(houseTotals).reduce(
+    (sum: number, h: any) => sum + h.dead,
+    0,
+  );
+  const grandTotalCulled = Object.values(houseTotals).reduce(
+    (sum: number, h: any) => sum + h.culled,
+    0,
+  );
   const grandTotal = grandTotalDead + grandTotalCulled;
 
   return (
@@ -279,7 +309,9 @@ export default function AdminDashboard() {
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">ระบบจัดการ - แอดมิน</h1>
+              <h1 className="text-2xl font-bold text-gray-800">
+                ระบบจัดการ - แอดมิน
+              </h1>
               <p className="text-sm text-gray-600 mt-1">{user?.full_name}</p>
             </div>
             <button
@@ -296,51 +328,51 @@ export default function AdminDashboard() {
         <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex space-x-8 overflow-x-auto">
             <button
-              onClick={() => setActiveTab('summary')}
+              onClick={() => setActiveTab("summary")}
               className={`py-4 px-2 border-b-2 font-medium text-sm transition whitespace-nowrap ${
-                activeTab === 'summary'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                activeTab === "summary"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
               ตารางสรุป
             </button>
             <button
-              onClick={() => setActiveTab('chart')}
+              onClick={() => setActiveTab("chart")}
               className={`py-4 px-2 border-b-2 font-medium text-sm transition whitespace-nowrap ${
-                activeTab === 'chart'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                activeTab === "chart"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
               กราฟสรุป
             </button>
             <button
-              onClick={() => setActiveTab('logs')}
+              onClick={() => setActiveTab("logs")}
               className={`py-4 px-2 border-b-2 font-medium text-sm transition whitespace-nowrap ${
-                activeTab === 'logs'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                activeTab === "logs"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
               ประวัติการทำรายการ
             </button>
             <button
-              onClick={() => setActiveTab('batches')}
+              onClick={() => setActiveTab("batches")}
               className={`py-4 px-2 border-b-2 font-medium text-sm transition whitespace-nowrap ${
-                activeTab === 'batches'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                activeTab === "batches"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
               จัดการรุ่น
             </button>
             <button
-              onClick={() => setActiveTab('users')}
+              onClick={() => setActiveTab("users")}
               className={`py-4 px-2 border-b-2 font-medium text-sm transition whitespace-nowrap ${
-                activeTab === 'users'
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                activeTab === "users"
+                  ? "border-blue-600 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
               }`}
             >
               จัดการผู้ใช้
@@ -350,140 +382,502 @@ export default function AdminDashboard() {
       </div>
 
       <main className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'summary' && activeBatch && (
+        {activeTab === "summary" && activeBatch && (
           <div className="space-y-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h2 className="font-semibold text-blue-900 text-lg mb-2">
-                สรุปไก่ตาย-ไก่คัดรุ่น {activeBatch.batch_name}
-              </h2>
-              <p className="text-sm text-blue-700">
-                เริ่มวันที่: {format(new Date(activeBatch.start_date), 'dd MMMM yyyy', { locale: th })}
-                {' '}(วันที่ {differenceInDays(new Date(getTodayThailand()), new Date(activeBatch.start_date)) + 1})
-              </p>
+            <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-5 md:p-6 text-white shadow-sm">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                  <p className="text-blue-100 text-sm font-semibold mb-1">
+                    ภาพรวมรุ่นปัจจุบัน
+                  </p>
+                  <h2 className="font-bold text-2xl md:text-3xl">
+                    สรุปไก่ตาย-ไก่คัด รุ่น {activeBatch.batch_name}
+                  </h2>
+                  <p className="text-sm md:text-base text-blue-100 mt-2">
+                    เริ่มวันที่:{" "}
+                    {format(new Date(activeBatch.start_date), "dd MMMM yyyy", {
+                      locale: th,
+                    })}{" "}
+                    (วันที่{" "}
+                    {differenceInDays(
+                      new Date(getTodayThailand()),
+                      new Date(activeBatch.start_date),
+                    ) + 1}
+                    )
+                  </p>
+                </div>
+                <button
+                  onClick={loadData}
+                  className="px-5 py-3 bg-white/15 hover:bg-white/25 border border-white/30 rounded-xl font-semibold transition"
+                >
+                  โหลดข้อมูลใหม่
+                </button>
+              </div>
             </div>
 
-            <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
-              <table className="min-w-full border-collapse" style={{ fontSize: '11px' }}>
-                <thead>
-                  <tr className="bg-yellow-400 border-b-2 border-black">
-                    <th rowSpan={2} className="border border-black px-2 py-2 text-center font-bold">วันที่</th>
-                    {[1, 2, 3, 4, 5, 6, 7].map(house => (
-                      <th key={house} colSpan={7} className="border border-black px-2 py-1 text-center font-bold">
-                        เล้า {house}
-                      </th>
-                    ))}
-                    <th rowSpan={2} className="border border-black px-2 py-2 text-center font-bold bg-yellow-300">รวม</th>
-                  </tr>
-                  <tr className="bg-yellow-300 border-b-2 border-black">
-                    {[1, 2, 3, 4, 5, 6, 7].map(house => (
-                      <React.Fragment key={house}>
-                        <th className="border border-black px-1 py-1 text-center font-bold">ตาย</th>
-                        <th className="border border-black px-1 py-1 text-center font-bold">คัด</th>
-                        <th className="border border-black px-1 py-1 text-center font-bold">รวม</th>
-                        <th className="border border-black px-1 py-1 text-center font-bold text-xs">อุณหภูมินอก</th>
-                        <th className="border border-black px-1 py-1 text-center font-bold text-xs">อุณหภูมิใน</th>
-                        <th className="border border-black px-1 py-1 text-center font-bold text-xs">ความชื้น</th>
-                        <th className="border border-black px-1 py-1 text-center font-bold text-xs">น้ำ</th>
-                      </React.Fragment>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {dailySummary.map((day, idx) => (
-                    <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                      <td className="border border-black px-2 py-1 text-center font-semibold">
-                        {day.dateDisplay}
-                      </td>
-                      {[1, 2, 3, 4, 5, 6, 7].map(house => {
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
+              <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-gray-200">
+                <p className="text-xs md:text-sm text-gray-500 font-semibold">
+                  จำนวนเริ่มต้น
+                </p>
+                <p className="text-2xl md:text-3xl font-bold text-gray-900 mt-1">
+                  {activeBatch.initial_count?.toLocaleString() || 0}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">ตัว</p>
+              </div>
+              <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-red-100">
+                <p className="text-xs md:text-sm text-gray-500 font-semibold">
+                  รวมตาย
+                </p>
+                <p className="text-2xl md:text-3xl font-bold text-red-600 mt-1">
+                  {grandTotalDead.toLocaleString()}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">ตัว</p>
+              </div>
+              <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-orange-100">
+                <p className="text-xs md:text-sm text-gray-500 font-semibold">
+                  รวมคัด
+                </p>
+                <p className="text-2xl md:text-3xl font-bold text-orange-600 mt-1">
+                  {grandTotalCulled.toLocaleString()}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">ตัว</p>
+              </div>
+              <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-yellow-100">
+                <p className="text-xs md:text-sm text-gray-500 font-semibold">
+                  รวมตาย/คัด
+                </p>
+                <p className="text-2xl md:text-3xl font-bold text-yellow-700 mt-1">
+                  {grandTotal.toLocaleString()}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">ตัว</p>
+              </div>
+              <div className="bg-white rounded-2xl p-4 md:p-5 shadow-sm border border-green-100 col-span-2 lg:col-span-1">
+                <p className="text-xs md:text-sm text-gray-500 font-semibold">
+                  คงเหลือโดยประมาณ
+                </p>
+                <p className="text-2xl md:text-3xl font-bold text-green-700 mt-1">
+                  {Math.max(
+                    (activeBatch.initial_count || 0) - grandTotal,
+                    0,
+                  ).toLocaleString()}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  จำนวนเริ่มต้น - ตาย/คัด
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 md:p-6">
+              <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-2 mb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    สรุปแยกตามเล้า
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    ดูง่ายกว่าเดิม เห็นยอดรวมของแต่ละเล้าทันที
+                  </p>
+                </div>
+                <p className="text-xs text-gray-400">
+                  ข้อมูลอุณหภูมิ/น้ำ แสดงจากรายการล่าสุดของแต่ละเล้า
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                {[1, 2, 3, 4, 5, 6, 7].map((house) => {
+                  const total = houseTotals[house];
+                  const latestRecord = [...records]
+                    .filter((r) => r.house_number === house)
+                    .sort((a, b) =>
+                      b.record_date.localeCompare(a.record_date),
+                    )[0];
+
+                  return (
+                    <div
+                      key={house}
+                      className="rounded-2xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-4 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xl">
+                            {house}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-gray-900 text-lg">
+                              เล้า {house}
+                            </h4>
+                            <p className="text-xs text-gray-500">
+                              ยอดสะสมทั้งรุ่น
+                            </p>
+                          </div>
+                        </div>
+                        <div
+                          className={`px-3 py-1 rounded-full text-xs font-bold ${total.total > 0 ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}
+                        >
+                          รวม {total.total}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 mb-4">
+                        <div className="rounded-xl bg-red-50 p-3 text-center">
+                          <p className="text-xs text-red-500 font-semibold">
+                            ตาย
+                          </p>
+                          <p className="text-xl font-bold text-red-700">
+                            {total.dead}
+                          </p>
+                        </div>
+                        <div className="rounded-xl bg-orange-50 p-3 text-center">
+                          <p className="text-xs text-orange-500 font-semibold">
+                            คัด
+                          </p>
+                          <p className="text-xl font-bold text-orange-700">
+                            {total.culled}
+                          </p>
+                        </div>
+                        <div className="rounded-xl bg-gray-100 p-3 text-center">
+                          <p className="text-xs text-gray-500 font-semibold">
+                            รวม
+                          </p>
+                          <p className="text-xl font-bold text-gray-900">
+                            {total.total}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="rounded-xl bg-white border border-gray-100 p-3">
+                          <p className="text-xs text-gray-400">อุณหภูมินอก</p>
+                          <p className="font-bold text-gray-800">
+                            {latestRecord?.morning_temp_outside ?? "-"} °C
+                          </p>
+                        </div>
+                        <div className="rounded-xl bg-white border border-gray-100 p-3">
+                          <p className="text-xs text-gray-400">อุณหภูมิใน</p>
+                          <p className="font-bold text-gray-800">
+                            {latestRecord?.morning_temp_inside ?? "-"} °C
+                          </p>
+                        </div>
+                        <div className="rounded-xl bg-white border border-gray-100 p-3">
+                          <p className="text-xs text-gray-400">ความชื้น</p>
+                          <p className="font-bold text-gray-800">
+                            {latestRecord?.morning_humidity ?? "-"} %
+                          </p>
+                        </div>
+                        <div className="rounded-xl bg-white border border-gray-100 p-3">
+                          <p className="text-xs text-gray-400">มิเตอร์น้ำ</p>
+                          <p className="font-bold text-gray-800">
+                            {latestRecord?.morning_water_meter ?? "-"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 md:p-6">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    ข้อมูลรายวันแบบอ่านง่าย
+                  </h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    แยกเป็นวัน แล้วแยกเป็นเล้า เหมาะกับหน้าจอโทรศัพท์
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {dailySummary.map((day, idx) => (
+                  <details
+                    key={idx}
+                    className="group rounded-2xl border border-gray-200 bg-gray-50 overflow-hidden"
+                    open={idx === dailySummary.length - 1}
+                  >
+                    <summary className="cursor-pointer list-none p-4 flex items-center justify-between gap-3 bg-white hover:bg-gray-50 transition">
+                      <div>
+                        <p className="font-bold text-gray-900">
+                          วันที่ {day.dateDisplay}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          วันที่ {day.day} ของรุ่น
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 font-bold text-sm">
+                          รวม {day.grandTotal || 0}
+                        </span>
+                        <span className="text-gray-400 group-open:rotate-180 transition">
+                          ⌄
+                        </span>
+                      </div>
+                    </summary>
+
+                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                      {[1, 2, 3, 4, 5, 6, 7].map((house) => {
                         const data = day.houses[house];
                         const record = records.find(
-                          r => r.house_number === house && r.record_date === day.date
+                          (r) =>
+                            r.house_number === house &&
+                            r.record_date === day.date,
                         );
                         return (
+                          <div
+                            key={house}
+                            className="rounded-xl bg-white border border-gray-200 p-4"
+                          >
+                            <div className="flex items-center justify-between mb-3">
+                              <h4 className="font-bold text-gray-900">
+                                เล้า {house}
+                              </h4>
+                              <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                                รวม {data.total || 0}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2 mb-3 text-center">
+                              <div className="rounded-lg bg-red-50 p-2">
+                                <p className="text-xs text-red-500">ตาย</p>
+                                <p className="font-bold text-red-700">
+                                  {data.dead || 0}
+                                </p>
+                              </div>
+                              <div className="rounded-lg bg-orange-50 p-2">
+                                <p className="text-xs text-orange-500">คัด</p>
+                                <p className="font-bold text-orange-700">
+                                  {data.culled || 0}
+                                </p>
+                              </div>
+                              <div className="rounded-lg bg-gray-100 p-2">
+                                <p className="text-xs text-gray-500">รวม</p>
+                                <p className="font-bold text-gray-900">
+                                  {data.total || 0}
+                                </p>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-sm text-gray-700">
+                              <p>
+                                นอก:{" "}
+                                <span className="font-semibold">
+                                  {record?.morning_temp_outside ?? "-"}
+                                </span>
+                              </p>
+                              <p>
+                                ใน:{" "}
+                                <span className="font-semibold">
+                                  {record?.morning_temp_inside ?? "-"}
+                                </span>
+                              </p>
+                              <p>
+                                ชื้น:{" "}
+                                <span className="font-semibold">
+                                  {record?.morning_humidity ?? "-"}
+                                </span>
+                              </p>
+                              <p>
+                                น้ำ:{" "}
+                                <span className="font-semibold">
+                                  {record?.morning_water_meter ?? "-"}
+                                </span>
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+              <div className="p-4 md:p-5 border-b border-gray-200 bg-gray-50">
+                <h3 className="text-xl font-bold text-gray-900">
+                  ตารางข้อมูลเดิมทั้งหมด
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  ยังคงข้อมูลเดิมครบทุกช่อง เลื่อนไปซ้าย-ขวาได้บนมือถือ
+                </p>
+              </div>
+              <div className="overflow-x-auto max-h-[70vh]">
+                <table className="min-w-[2400px] border-collapse text-xs md:text-sm">
+                  <thead className="sticky top-0 z-20">
+                    <tr className="bg-yellow-400 border-b-2 border-black">
+                      <th
+                        rowSpan={2}
+                        className="sticky left-0 z-30 bg-yellow-400 border border-black px-3 py-3 text-center font-bold min-w-[92px]"
+                      >
+                        วันที่
+                      </th>
+                      {[1, 2, 3, 4, 5, 6, 7].map((house) => (
+                        <th
+                          key={house}
+                          colSpan={7}
+                          className="border border-black px-2 py-2 text-center font-bold"
+                        >
+                          เล้า {house}
+                        </th>
+                      ))}
+                      <th
+                        rowSpan={2}
+                        className="border border-black px-3 py-3 text-center font-bold bg-yellow-300 min-w-[72px]"
+                      >
+                        รวม
+                      </th>
+                    </tr>
+                    <tr className="bg-yellow-300 border-b-2 border-black">
+                      {[1, 2, 3, 4, 5, 6, 7].map((house) => (
+                        <React.Fragment key={house}>
+                          <th className="border border-black px-2 py-2 text-center font-bold min-w-[54px]">
+                            ตาย
+                          </th>
+                          <th className="border border-black px-2 py-2 text-center font-bold min-w-[54px]">
+                            คัด
+                          </th>
+                          <th className="border border-black px-2 py-2 text-center font-bold min-w-[54px]">
+                            รวม
+                          </th>
+                          <th className="border border-black px-2 py-2 text-center font-bold min-w-[78px]">
+                            อุณหภูมินอก
+                          </th>
+                          <th className="border border-black px-2 py-2 text-center font-bold min-w-[78px]">
+                            อุณหภูมิใน
+                          </th>
+                          <th className="border border-black px-2 py-2 text-center font-bold min-w-[70px]">
+                            ความชื้น
+                          </th>
+                          <th className="border border-black px-2 py-2 text-center font-bold min-w-[70px]">
+                            น้ำ
+                          </th>
+                        </React.Fragment>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailySummary.map((day, idx) => (
+                      <tr
+                        key={idx}
+                        className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                      >
+                        <td
+                          className={`sticky left-0 z-10 border border-black px-3 py-2 text-center font-semibold ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"}`}
+                        >
+                          {day.dateDisplay}
+                        </td>
+                        {[1, 2, 3, 4, 5, 6, 7].map((house) => {
+                          const data = day.houses[house];
+                          const record = records.find(
+                            (r) =>
+                              r.house_number === house &&
+                              r.record_date === day.date,
+                          );
+                          return (
+                            <React.Fragment key={house}>
+                              <td className="border border-black px-2 py-2 text-center text-red-700">
+                                {data.dead > 0 ? data.dead : ""}
+                              </td>
+                              <td className="border border-black px-2 py-2 text-center text-orange-700">
+                                {data.culled > 0 ? data.culled : ""}
+                              </td>
+                              <td className="border border-black px-2 py-2 text-center font-semibold">
+                                {data.total > 0 ? data.total : ""}
+                              </td>
+                              <td className="border border-black px-2 py-2 text-center">
+                                {record?.morning_temp_outside || "-"}
+                              </td>
+                              <td className="border border-black px-2 py-2 text-center">
+                                {record?.morning_temp_inside || "-"}
+                              </td>
+                              <td className="border border-black px-2 py-2 text-center">
+                                {record?.morning_humidity || "-"}
+                              </td>
+                              <td className="border border-black px-2 py-2 text-center">
+                                {record?.morning_water_meter || "-"}
+                              </td>
+                            </React.Fragment>
+                          );
+                        })}
+                        <td className="border border-black px-3 py-2 text-center font-bold bg-yellow-100">
+                          {day.grandTotal > 0 ? day.grandTotal : ""}
+                        </td>
+                      </tr>
+                    ))}
+
+                    <tr className="bg-yellow-200 border-t-2 border-black">
+                      <td className="sticky left-0 z-10 bg-yellow-200 border border-black px-3 py-3 text-center font-bold">
+                        รวม
+                      </td>
+                      {[1, 2, 3, 4, 5, 6, 7].map((house) => {
+                        const data = houseTotals[house];
+                        return (
                           <React.Fragment key={house}>
-                            <td className="border border-black px-1 py-1 text-center">
-                              {data.dead > 0 ? data.dead : ''}
+                            <td className="border border-black px-2 py-3 text-center font-bold text-red-700">
+                              {data.dead}
                             </td>
-                            <td className="border border-black px-1 py-1 text-center">
-                              {data.culled > 0 ? data.culled : ''}
+                            <td className="border border-black px-2 py-3 text-center font-bold text-orange-700">
+                              {data.culled}
                             </td>
-                            <td className="border border-black px-1 py-1 text-center font-semibold">
-                              {data.total > 0 ? data.total : ''}
+                            <td className="border border-black px-2 py-3 text-center font-bold">
+                              {data.total}
                             </td>
-                            <td className="border border-black px-1 py-1 text-center text-xs">
-                              {record?.morning_temp_outside || '-'}
-                            </td>
-                            <td className="border border-black px-1 py-1 text-center text-xs">
-                              {record?.morning_temp_inside || '-'}
-                            </td>
-                            <td className="border border-black px-1 py-1 text-center text-xs">
-                              {record?.morning_humidity || '-'}
-                            </td>
-                            <td className="border border-black px-1 py-1 text-center text-xs">
-                              {record?.morning_water_meter || '-'}
+                            <td
+                              colSpan={4}
+                              className="border border-black px-2 py-3 text-center text-gray-400"
+                            >
+                              -
                             </td>
                           </React.Fragment>
                         );
                       })}
-                      <td className="border border-black px-2 py-1 text-center font-bold bg-yellow-100">
-                        {day.grandTotal > 0 ? day.grandTotal : ''}
+                      <td className="border border-black px-3 py-3 text-center font-bold text-lg bg-yellow-300">
+                        {grandTotal}
                       </td>
                     </tr>
-                  ))}
-                  
-                  <tr className="bg-yellow-200 border-t-2 border-black">
-                    <td className="border border-black px-2 py-2 text-center font-bold">รวม</td>
-                    {[1, 2, 3, 4, 5, 6, 7].map(house => {
-                      const data = houseTotals[house];
-                      return (
-                        <React.Fragment key={house}>
-                          <td className="border border-black px-1 py-2 text-center font-bold text-red-700">
-                            {data.dead}
-                          </td>
-                          <td className="border border-black px-1 py-2 text-center font-bold text-orange-700">
-                            {data.culled}
-                          </td>
-                          <td className="border border-black px-1 py-2 text-center font-bold">
-                            {data.total}
-                          </td>
-                          <td colSpan={4} className="border border-black px-1 py-2 text-center text-xs text-gray-400">
-                            -
-                          </td>
-                        </React.Fragment>
-                      );
-                    })}
-                    <td className="border border-black px-2 py-2 text-center font-bold text-lg bg-yellow-300">
-                      {grandTotal}
-                    </td>
-                  </tr>
 
-                  <tr className="bg-blue-100">
-                    <td className="border border-black px-2 py-2 text-center font-bold">รวมตาย</td>
-                    <td colSpan={49} className="border border-black px-2 py-2 text-center font-bold text-red-700">
-                      {grandTotalDead}
-                    </td>
-                  </tr>
+                    <tr className="bg-blue-100">
+                      <td className="sticky left-0 z-10 bg-blue-100 border border-black px-3 py-3 text-center font-bold">
+                        รวมตาย
+                      </td>
+                      <td
+                        colSpan={49}
+                        className="border border-black px-3 py-3 text-center font-bold text-red-700"
+                      >
+                        {grandTotalDead}
+                      </td>
+                    </tr>
 
-                  <tr className="bg-orange-100">
-                    <td className="border border-black px-2 py-2 text-center font-bold">รวมคัด</td>
-                    <td colSpan={49} className="border border-black px-2 py-2 text-center font-bold text-orange-700">
-                      {grandTotalCulled}
-                    </td>
-                  </tr>
+                    <tr className="bg-orange-100">
+                      <td className="sticky left-0 z-10 bg-orange-100 border border-black px-3 py-3 text-center font-bold">
+                        รวมคัด
+                      </td>
+                      <td
+                        colSpan={49}
+                        className="border border-black px-3 py-3 text-center font-bold text-orange-700"
+                      >
+                        {grandTotalCulled}
+                      </td>
+                    </tr>
 
-                  <tr className="bg-red-200">
-                    <td className="border border-black px-2 py-2 text-center font-bold">รวมตาย/คัด</td>
-                    <td colSpan={49} className="border border-black px-2 py-2 text-center font-bold text-lg">
-                      {grandTotal}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                    <tr className="bg-red-200">
+                      <td className="sticky left-0 z-10 bg-red-200 border border-black px-3 py-3 text-center font-bold">
+                        รวมตาย/คัด
+                      </td>
+                      <td
+                        colSpan={49}
+                        className="border border-black px-3 py-3 text-center font-bold text-lg"
+                      >
+                        {grandTotal}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
 
-        {activeTab === 'chart' && activeBatch && (
+        {activeTab === "chart" && activeBatch && (
           <div className="space-y-6">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h2 className="font-semibold text-blue-900 text-lg">
@@ -492,27 +886,71 @@ export default function AdminDashboard() {
             </div>
 
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">กราฟแสดงแนวโน้มรายวัน (แยกตามเล้า)</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                กราฟแสดงแนวโน้มรายวัน (แยกตามเล้า)
+              </h3>
               <ResponsiveContainer width="100%" height={400}>
                 <LineChart data={prepareChartData()}>
                   <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" angle={-45} textAnchor="end" height={100} />
+                  <XAxis
+                    dataKey="date"
+                    angle={-45}
+                    textAnchor="end"
+                    height={100}
+                  />
                   <YAxis />
                   <Tooltip />
                   <Legend />
-                  <Line type="monotone" dataKey="เล้า 1" stroke="#ef4444" strokeWidth={2} />
-                  <Line type="monotone" dataKey="เล้า 2" stroke="#f97316" strokeWidth={2} />
-                  <Line type="monotone" dataKey="เล้า 3" stroke="#eab308" strokeWidth={2} />
-                  <Line type="monotone" dataKey="เล้า 4" stroke="#84cc16" strokeWidth={2} />
-                  <Line type="monotone" dataKey="เล้า 5" stroke="#22c55e" strokeWidth={2} />
-                  <Line type="monotone" dataKey="เล้า 6" stroke="#3b82f6" strokeWidth={2} />
-                  <Line type="monotone" dataKey="เล้า 7" stroke="#8b5cf6" strokeWidth={2} />
+                  <Line
+                    type="monotone"
+                    dataKey="เล้า 1"
+                    stroke="#ef4444"
+                    strokeWidth={2}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="เล้า 2"
+                    stroke="#f97316"
+                    strokeWidth={2}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="เล้า 3"
+                    stroke="#eab308"
+                    strokeWidth={2}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="เล้า 4"
+                    stroke="#84cc16"
+                    strokeWidth={2}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="เล้า 5"
+                    stroke="#22c55e"
+                    strokeWidth={2}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="เล้า 6"
+                    stroke="#3b82f6"
+                    strokeWidth={2}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="เล้า 7"
+                    stroke="#8b5cf6"
+                    strokeWidth={2}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             </div>
 
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">สรุปยอดรวมแต่ละเล้า</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                สรุปยอดรวมแต่ละเล้า
+              </h3>
               <ResponsiveContainer width="100%" height={400}>
                 <BarChart data={prepareHouseChartData()}>
                   <CartesianGrid strokeDasharray="3 3" />
@@ -528,20 +966,36 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {(activeTab === 'summary' || activeTab === 'chart') && !activeBatch && (
+        {(activeTab === "summary" || activeTab === "chart") && !activeBatch && (
           <div className="text-center bg-white p-12 rounded-lg shadow-sm">
-            <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            <svg
+              className="w-16 h-16 text-gray-400 mx-auto mb-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              />
             </svg>
-            <h3 className="text-xl font-semibold text-gray-700 mb-2">ยังไม่มีรุ่นที่เปิดใช้งาน</h3>
-            <p className="text-gray-500 mb-6">กรุณาสร้างรุ่นใหม่ในเมนู "จัดการรุ่น"</p>
+            <h3 className="text-xl font-semibold text-gray-700 mb-2">
+              ยังไม่มีรุ่นที่เปิดใช้งาน
+            </h3>
+            <p className="text-gray-500 mb-6">
+              กรุณาสร้างรุ่นใหม่ในเมนู "จัดการรุ่น"
+            </p>
           </div>
         )}
 
-        {activeTab === 'logs' && (
+        {activeTab === "logs" && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-gray-800">ประวัติการทำรายการ</h2>
+              <h2 className="text-xl font-semibold text-gray-800">
+                ประวัติการทำรายการ
+              </h2>
             </div>
 
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
@@ -549,30 +1003,47 @@ export default function AdminDashboard() {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เวลา</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ผู้ใช้</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เล้า</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">กิจกรรม</th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่บันทึก</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        เวลา
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        ผู้ใช้
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        เล้า
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        กิจกรรม
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        วันที่บันทึก
+                      </th>
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {activityLogs.map((log) => (
                       <tr key={log.id} className="hover:bg-gray-50">
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {new Date(log.created_at).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' })}
+                          {new Date(log.created_at).toLocaleString("th-TH", {
+                            timeZone: "Asia/Bangkok",
+                          })}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {log.users?.full_name || '-'}
+                          {log.users?.full_name || "-"}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {log.house_number || '-'}
+                          {log.house_number || "-"}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500">
                           {log.description}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {log.record_date ? new Date(log.record_date).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok' }) : '-'}
+                          {log.record_date
+                            ? new Date(log.record_date).toLocaleDateString(
+                                "th-TH",
+                                { timeZone: "Asia/Bangkok" },
+                              )
+                            : "-"}
                         </td>
                       </tr>
                     ))}
@@ -583,10 +1054,12 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {activeTab === 'batches' && (
+        {activeTab === "batches" && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-gray-800">จัดการรุ่น</h2>
+              <h2 className="text-xl font-semibold text-gray-800">
+                จัดการรุ่น
+              </h2>
               <button
                 onClick={() => setShowBatchForm(true)}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
@@ -597,10 +1070,14 @@ export default function AdminDashboard() {
 
             {showBatchForm && (
               <div className="bg-white rounded-lg shadow-sm p-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">สร้างรุ่นใหม่</h3>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                  สร้างรุ่นใหม่
+                </h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">ชื่อรุ่น</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      ชื่อรุ่น
+                    </label>
                     <input
                       type="text"
                       value={newBatchName}
@@ -610,7 +1087,9 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">วันที่เริ่มรุ่น</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      วันที่เริ่มรุ่น
+                    </label>
                     <input
                       type="date"
                       value={newBatchStartDate}
@@ -619,7 +1098,9 @@ export default function AdminDashboard() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">จำนวนเริ่มต้น</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      จำนวนเริ่มต้น
+                    </label>
                     <input
                       type="number"
                       value={newBatchInitialCount}
@@ -650,11 +1131,21 @@ export default function AdminDashboard() {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ชื่อรุ่น</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่เริ่ม</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">วันที่จบ</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">สถานะ</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">จัดการ</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      ชื่อรุ่น
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      วันที่เริ่ม
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      วันที่จบ
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      สถานะ
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      จัดการ
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -664,10 +1155,12 @@ export default function AdminDashboard() {
                         {batch.batch_name}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {format(new Date(batch.start_date), 'dd/MM/yyyy')}
+                        {format(new Date(batch.start_date), "dd/MM/yyyy")}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {batch.end_date ? format(new Date(batch.end_date), 'dd/MM/yyyy') : '-'}
+                        {batch.end_date
+                          ? format(new Date(batch.end_date), "dd/MM/yyyy")
+                          : "-"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {batch.is_active ? (
@@ -691,7 +1184,9 @@ export default function AdminDashboard() {
                             </button>
                           )}
                           <button
-                            onClick={() => handleDeleteBatch(batch.id, batch.batch_name)}
+                            onClick={() =>
+                              handleDeleteBatch(batch.id, batch.batch_name)
+                            }
                             className="text-red-600 hover:text-red-900 font-medium"
                           >
                             ลบ
@@ -706,21 +1201,33 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {activeTab === 'users' && (
+        {activeTab === "users" && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-gray-800">จัดการผู้ใช้</h2>
+              <h2 className="text-xl font-semibold text-gray-800">
+                จัดการผู้ใช้
+              </h2>
             </div>
 
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ชื่อผู้ใช้</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ชื่อ-นามสกุล</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">บทบาท</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">เล้า</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">สถานะ</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      ชื่อผู้ใช้
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      ชื่อ-นามสกุล
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      บทบาท
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      เล้า
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      สถานะ
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -733,10 +1240,10 @@ export default function AdminDashboard() {
                         {u.full_name}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {u.role === 'admin' ? 'ผู้ดูแลระบบ' : 'พนักงาน'}
+                        {u.role === "admin" ? "ผู้ดูแลระบบ" : "พนักงาน"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {u.house_number || '-'}
+                        {u.house_number || "-"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {u.is_active ? (
