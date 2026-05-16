@@ -8,12 +8,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // Auth helpers
 export const signIn = async (username: string, password: string) => {
   try {
-    // In production, you should use Supabase Auth with email
-    // For now, we'll use a custom authentication
+    const cleanUsername = username.trim();
+    const cleanPassword = password.trim();
+
     const { data, error } = await supabase
       .from('users')
       .select('*')
-      .eq('username', username)
+      .eq('username', cleanUsername)
+      .eq('password_hash', cleanPassword)
       .eq('is_active', true)
       .single();
 
@@ -21,8 +23,6 @@ export const signIn = async (username: string, password: string) => {
       throw new Error('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
     }
 
-    // In production, verify password_hash properly
-    // For now, storing user in localStorage
     if (typeof window !== 'undefined') {
       localStorage.setItem('user', JSON.stringify(data));
     }
