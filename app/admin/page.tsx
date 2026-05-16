@@ -474,9 +474,6 @@ export default function AdminDashboard() {
                   <h3 className="text-xl font-bold text-gray-900">
                     สรุปแยกตามเล้า
                   </h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    ดูง่ายกว่าเดิม เห็นยอดรวมของแต่ละเล้าทันที
-                  </p>
                 </div>
                 <p className="text-xs text-gray-400">
                   ข้อมูลอุณหภูมิ/น้ำ แสดงจากรายการล่าสุดของแต่ละเล้า
@@ -583,9 +580,6 @@ export default function AdminDashboard() {
                   <h3 className="text-xl font-bold text-gray-900">
                     ข้อมูลรายวันแบบอ่านง่าย
                   </h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    แยกเป็นวัน แล้วแยกเป็นเล้า เหมาะกับหน้าจอโทรศัพท์
-                  </p>
                 </div>
               </div>
 
@@ -696,9 +690,6 @@ export default function AdminDashboard() {
                 <h3 className="text-xl font-bold text-gray-900">
                   ตารางข้อมูลเดิมทั้งหมด
                 </h3>
-                <p className="text-sm text-gray-500 mt-1">
-                  ยังคงข้อมูลเดิมครบทุกช่อง เลื่อนไปซ้าย-ขวาได้บนมือถือ
-                </p>
               </div>
               <div className="overflow-x-auto max-h-[70vh]">
                 <table className="min-w-[2400px] border-collapse text-xs md:text-sm">
