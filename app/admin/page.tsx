@@ -594,13 +594,13 @@ export default function AdminDashboard() {
 
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div className="rounded-xl bg-white border border-gray-100 p-3">
-                          <p className="text-xs text-gray-400">อุณหภูมินอก</p>
+                          <p className="text-xs text-gray-400">อุณหภูมินอกเล้า</p>
                           <p className="font-bold text-gray-800">
                             {latestRecord?.morning_temp_outside ?? "-"} °C
                           </p>
                         </div>
                         <div className="rounded-xl bg-white border border-gray-100 p-3">
-                          <p className="text-xs text-gray-400">อุณหภูมิใน</p>
+                          <p className="text-xs text-gray-400">อุณหภูมิในเล้า</p>
                           <p className="font-bold text-gray-800">
                             {latestRecord?.morning_temp_inside ?? "-"} °C
                           </p>
@@ -742,9 +742,6 @@ export default function AdminDashboard() {
                     <h3 className="text-xl font-bold text-gray-900">
                       ตารางข้อมูลเดิมทั้งหมด
                     </h3>
-                    <p className="text-sm text-gray-500 mt-1">
-                      ตารางนี้ยังเก็บข้อมูลเดิมครบทุกช่อง แต่ย่อให้พอดีกับหน้ามากขึ้น สามารถซูมเข้า/ออก และ Export เป็นรูปภาพได้
-                    </p>
                   </div>
 
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -836,10 +833,10 @@ export default function AdminDashboard() {
                             รวม
                           </th>
                           <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[55px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
-                            อุณหภูมินอก
+                            อุณหภูมินอกเล้า
                           </th>
                           <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[55px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
-                            อุณหภูมิใน
+                            อุณหภูมิในเล้า
                           </th>
                           <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[48px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
                             ความชื้น
