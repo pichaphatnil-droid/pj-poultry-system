@@ -57,7 +57,7 @@ const TEXT = {
     culledChicken: '⚠️ ຈຳນວນໄກ່ຄັດອອກ (ໂຕ)',
     tempOutside: '🌡️ ອຸນຫະພູມນອກເລົ້າ (°C)',
     tempInside: '🌡️ ອຸນຫະພູມໃນເລົ້າ (°C)',
-    humidity: '💧 ຄວາມຊຸ່ມຊື່ນ (%)',
+    humidity: '💧 ຄວາມຊື້ນ (%)',
     waterMeter: '💦 ມິເຕີນ້ຳ',
     morningSaved: 'ບັນທຶກຂໍ້ມູນຕອນເຊົ້າແລ້ວ ເມື່ອ',
     afternoonSaved: 'ບັນທຶກຂໍ້ມູນຕອນບ່າຍແລ້ວ ເມື່ອ',
