@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getCurrentUser, signOut, supabase } from "../lib/supabase";
 import { getTodayThailand, getNowThailand } from "../lib/dateUtils";
@@ -47,6 +47,9 @@ export default function AdminDashboard() {
   const [newBatchName, setNewBatchName] = useState("");
   const [newBatchStartDate, setNewBatchStartDate] = useState("");
   const [newBatchInitialCount, setNewBatchInitialCount] = useState("");
+  const [legacyTableZoom, setLegacyTableZoom] = useState(0.72);
+  const legacyTableExportRef = useRef<HTMLDivElement | null>(null);
+  const [exportingLegacyTable, setExportingLegacyTable] = useState(false);
 
   useEffect(() => {
     const currentUser = getCurrentUser();
@@ -178,6 +181,42 @@ export default function AdminDashboard() {
       loadData();
     } catch (error: any) {
       alert("เกิดข้อผิดพลาด: " + error.message);
+    }
+  };
+
+
+  const handleExportLegacyTableImage = async () => {
+    const element = legacyTableExportRef.current;
+    if (!element) return;
+
+    setExportingLegacyTable(true);
+
+    const previousZoom = element.style.zoom;
+    element.style.zoom = "1";
+
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const canvas = await html2canvas(element, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+        windowWidth: element.scrollWidth,
+        windowHeight: element.scrollHeight,
+      });
+
+      const link = document.createElement("a");
+      link.download = `ตารางข้อมูลเดิม-${activeBatch?.batch_name || "batch"}-${getTodayThailand()}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (error) {
+      alert(
+        "ไม่สามารถ Export เป็นรูปภาพได้ กรุณาติดตั้งแพ็กเกจ html2canvas ด้วยคำสั่ง: npm install html2canvas",
+      );
+    } finally {
+      element.style.zoom = previousZoom;
+      setExportingLegacyTable(false);
     }
   };
 
@@ -687,17 +726,72 @@ export default function AdminDashboard() {
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
               <div className="p-4 md:p-5 border-b border-gray-200 bg-gray-50">
-                <h3 className="text-xl font-bold text-gray-900">
-                  ตารางข้อมูลเดิมทั้งหมด
-                </h3>
+                <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-900">
+                      ตารางข้อมูลเดิมทั้งหมด
+                    </h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      ตารางนี้ยังเก็บข้อมูลเดิมครบทุกช่อง แต่ย่อให้พอดีกับหน้ามากขึ้น สามารถซูมเข้า/ออก และ Export เป็นรูปภาพได้
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2">
+                      <span className="text-sm font-semibold text-gray-600 whitespace-nowrap">
+                        ซูมตาราง
+                      </span>
+                      <button
+                        onClick={() =>
+                          setLegacyTableZoom((value) =>
+                            Math.max(0.55, Number((value - 0.05).toFixed(2))),
+                          )
+                        }
+                        className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold"
+                        type="button"
+                      >
+                        −
+                      </button>
+                      <span className="w-14 text-center text-sm font-bold text-gray-800">
+                        {Math.round(legacyTableZoom * 100)}%
+                      </span>
+                      <button
+                        onClick={() =>
+                          setLegacyTableZoom((value) =>
+                            Math.min(1, Number((value + 0.05).toFixed(2))),
+                          )
+                        }
+                        className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold"
+                        type="button"
+                      >
+                        +
+                      </button>
+                    </div>
+
+                    <button
+                      onClick={handleExportLegacyTableImage}
+                      disabled={exportingLegacyTable}
+                      className="px-4 py-3 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold shadow-sm transition"
+                      type="button"
+                    >
+                      {exportingLegacyTable ? "กำลัง Export..." : "Export เป็นภาพ PNG"}
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className="overflow-x-auto max-h-[70vh]">
-                <table className="min-w-[2400px] border-collapse text-xs md:text-sm">
+
+              <div className="overflow-x-auto max-h-[72vh] bg-gray-100 p-3">
+                <div
+                  ref={legacyTableExportRef}
+                  className="inline-block origin-top-left bg-white"
+                  style={{ zoom: legacyTableZoom } as React.CSSProperties}
+                >
+                  <table className="border-collapse text-[11px] leading-tight">
                   <thead className="sticky top-0 z-20">
                     <tr className="bg-yellow-400 border-b-2 border-black">
                       <th
                         rowSpan={2}
-                        className="sticky left-0 z-30 bg-yellow-400 border border-black px-3 py-3 text-center font-bold min-w-[92px]"
+                        className="sticky left-0 z-30 bg-yellow-400 border border-black px-2 py-2 text-center font-bold min-w-[72px]"
                       >
                         วันที่
                       </th>
@@ -712,7 +806,7 @@ export default function AdminDashboard() {
                       ))}
                       <th
                         rowSpan={2}
-                        className="border border-black px-3 py-3 text-center font-bold bg-yellow-300 min-w-[72px]"
+                        className="border border-black px-2 py-2 text-center font-bold bg-yellow-300 min-w-[56px]"
                       >
                         รวม
                       </th>
@@ -720,25 +814,25 @@ export default function AdminDashboard() {
                     <tr className="bg-yellow-300 border-b-2 border-black">
                       {[1, 2, 3, 4, 5, 6, 7].map((house) => (
                         <React.Fragment key={house}>
-                          <th className="border border-black px-2 py-2 text-center font-bold min-w-[54px]">
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[36px]">
                             ตาย
                           </th>
-                          <th className="border border-black px-2 py-2 text-center font-bold min-w-[54px]">
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[36px]">
                             คัด
                           </th>
-                          <th className="border border-black px-2 py-2 text-center font-bold min-w-[54px]">
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[36px]">
                             รวม
                           </th>
-                          <th className="border border-black px-2 py-2 text-center font-bold min-w-[78px]">
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[55px]">
                             อุณหภูมินอก
                           </th>
-                          <th className="border border-black px-2 py-2 text-center font-bold min-w-[78px]">
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[55px]">
                             อุณหภูมิใน
                           </th>
-                          <th className="border border-black px-2 py-2 text-center font-bold min-w-[70px]">
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[48px]">
                             ความชื้น
                           </th>
-                          <th className="border border-black px-2 py-2 text-center font-bold min-w-[70px]">
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[48px]">
                             น้ำ
                           </th>
                         </React.Fragment>
@@ -752,7 +846,7 @@ export default function AdminDashboard() {
                         className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}
                       >
                         <td
-                          className={`sticky left-0 z-10 border border-black px-3 py-2 text-center font-semibold ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"}`}
+                          className={`sticky left-0 z-10 border border-black px-2 py-1.5 text-center font-semibold ${idx % 2 === 0 ? "bg-white" : "bg-gray-50"}`}
                         >
                           {day.dateDisplay}
                         </td>
@@ -765,104 +859,105 @@ export default function AdminDashboard() {
                           );
                           return (
                             <React.Fragment key={house}>
-                              <td className="border border-black px-2 py-2 text-center text-red-700">
+                              <td className="border border-black px-1.5 py-1.5 text-center text-red-700">
                                 {data.dead > 0 ? data.dead : ""}
                               </td>
-                              <td className="border border-black px-2 py-2 text-center text-orange-700">
+                              <td className="border border-black px-1.5 py-1.5 text-center text-orange-700">
                                 {data.culled > 0 ? data.culled : ""}
                               </td>
-                              <td className="border border-black px-2 py-2 text-center font-semibold">
+                              <td className="border border-black px-1.5 py-1.5 text-center font-semibold">
                                 {data.total > 0 ? data.total : ""}
                               </td>
-                              <td className="border border-black px-2 py-2 text-center">
+                              <td className="border border-black px-1.5 py-1.5 text-center">
                                 {record?.morning_temp_outside || "-"}
                               </td>
-                              <td className="border border-black px-2 py-2 text-center">
+                              <td className="border border-black px-1.5 py-1.5 text-center">
                                 {record?.morning_temp_inside || "-"}
                               </td>
-                              <td className="border border-black px-2 py-2 text-center">
+                              <td className="border border-black px-1.5 py-1.5 text-center">
                                 {record?.morning_humidity || "-"}
                               </td>
-                              <td className="border border-black px-2 py-2 text-center">
+                              <td className="border border-black px-1.5 py-1.5 text-center">
                                 {record?.morning_water_meter || "-"}
                               </td>
                             </React.Fragment>
                           );
                         })}
-                        <td className="border border-black px-3 py-2 text-center font-bold bg-yellow-100">
+                        <td className="border border-black px-2 py-1.5 text-center font-bold bg-yellow-100">
                           {day.grandTotal > 0 ? day.grandTotal : ""}
                         </td>
                       </tr>
                     ))}
 
                     <tr className="bg-yellow-200 border-t-2 border-black">
-                      <td className="sticky left-0 z-10 bg-yellow-200 border border-black px-3 py-3 text-center font-bold">
+                      <td className="sticky left-0 z-10 bg-yellow-200 border border-black px-2 py-2 text-center font-bold">
                         รวม
                       </td>
                       {[1, 2, 3, 4, 5, 6, 7].map((house) => {
                         const data = houseTotals[house];
                         return (
                           <React.Fragment key={house}>
-                            <td className="border border-black px-2 py-3 text-center font-bold text-red-700">
+                            <td className="border border-black px-1.5 py-2 text-center font-bold text-red-700">
                               {data.dead}
                             </td>
-                            <td className="border border-black px-2 py-3 text-center font-bold text-orange-700">
+                            <td className="border border-black px-1.5 py-2 text-center font-bold text-orange-700">
                               {data.culled}
                             </td>
-                            <td className="border border-black px-2 py-3 text-center font-bold">
+                            <td className="border border-black px-1.5 py-2 text-center font-bold">
                               {data.total}
                             </td>
                             <td
                               colSpan={4}
-                              className="border border-black px-2 py-3 text-center text-gray-400"
+                              className="border border-black px-1.5 py-2 text-center text-gray-400"
                             >
                               -
                             </td>
                           </React.Fragment>
                         );
                       })}
-                      <td className="border border-black px-3 py-3 text-center font-bold text-lg bg-yellow-300">
+                      <td className="border border-black px-2 py-2 text-center font-bold text-lg bg-yellow-300">
                         {grandTotal}
                       </td>
                     </tr>
 
                     <tr className="bg-blue-100">
-                      <td className="sticky left-0 z-10 bg-blue-100 border border-black px-3 py-3 text-center font-bold">
+                      <td className="sticky left-0 z-10 bg-blue-100 border border-black px-2 py-2 text-center font-bold">
                         รวมตาย
                       </td>
                       <td
                         colSpan={49}
-                        className="border border-black px-3 py-3 text-center font-bold text-red-700"
+                        className="border border-black px-2 py-2 text-center font-bold text-red-700"
                       >
                         {grandTotalDead}
                       </td>
                     </tr>
 
                     <tr className="bg-orange-100">
-                      <td className="sticky left-0 z-10 bg-orange-100 border border-black px-3 py-3 text-center font-bold">
+                      <td className="sticky left-0 z-10 bg-orange-100 border border-black px-2 py-2 text-center font-bold">
                         รวมคัด
                       </td>
                       <td
                         colSpan={49}
-                        className="border border-black px-3 py-3 text-center font-bold text-orange-700"
+                        className="border border-black px-2 py-2 text-center font-bold text-orange-700"
                       >
                         {grandTotalCulled}
                       </td>
                     </tr>
 
                     <tr className="bg-red-200">
-                      <td className="sticky left-0 z-10 bg-red-200 border border-black px-3 py-3 text-center font-bold">
+                      <td className="sticky left-0 z-10 bg-red-200 border border-black px-2 py-2 text-center font-bold">
                         รวมตาย/คัด
                       </td>
                       <td
                         colSpan={49}
-                        className="border border-black px-3 py-3 text-center font-bold text-lg"
+                        className="border border-black px-2 py-2 text-center font-bold text-lg"
                       >
                         {grandTotal}
                       </td>
                     </tr>
                   </tbody>
-                </table>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
