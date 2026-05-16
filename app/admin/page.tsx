@@ -51,6 +51,17 @@ export default function AdminDashboard() {
   const legacyTableExportRef = useRef<HTMLDivElement | null>(null);
   const [exportingLegacyTable, setExportingLegacyTable] = useState(false);
 
+  const legacyHouseColors = [
+    { header: "#fecaca", subHeader: "#fee2e2", cell: "#fff1f2", cellAlt: "#ffe4e6", total: "#fecaca" },
+    { header: "#fed7aa", subHeader: "#ffedd5", cell: "#fff7ed", cellAlt: "#ffedd5", total: "#fed7aa" },
+    { header: "#fde68a", subHeader: "#fef3c7", cell: "#fffbeb", cellAlt: "#fef3c7", total: "#fde68a" },
+    { header: "#bbf7d0", subHeader: "#dcfce7", cell: "#f0fdf4", cellAlt: "#dcfce7", total: "#bbf7d0" },
+    { header: "#bfdbfe", subHeader: "#dbeafe", cell: "#eff6ff", cellAlt: "#dbeafe", total: "#bfdbfe" },
+    { header: "#c7d2fe", subHeader: "#e0e7ff", cell: "#eef2ff", cellAlt: "#e0e7ff", total: "#c7d2fe" },
+    { header: "#ddd6fe", subHeader: "#ede9fe", cell: "#f5f3ff", cellAlt: "#ede9fe", total: "#ddd6fe" },
+  ];
+
+
   useEffect(() => {
     const currentUser = getCurrentUser();
     if (!currentUser || currentUser.role !== "admin") {
@@ -800,6 +811,7 @@ export default function AdminDashboard() {
                           key={house}
                           colSpan={7}
                           className="border border-black px-2 py-2 text-center font-bold"
+                          style={{ backgroundColor: legacyHouseColors[house - 1].header }}
                         >
                           เล้า {house}
                         </th>
@@ -814,25 +826,25 @@ export default function AdminDashboard() {
                     <tr className="bg-yellow-300 border-b-2 border-black">
                       {[1, 2, 3, 4, 5, 6, 7].map((house) => (
                         <React.Fragment key={house}>
-                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[36px]">
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[36px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
                             ตาย
                           </th>
-                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[36px]">
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[36px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
                             คัด
                           </th>
-                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[36px]">
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[36px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
                             รวม
                           </th>
-                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[55px]">
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[55px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
                             อุณหภูมินอก
                           </th>
-                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[55px]">
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[55px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
                             อุณหภูมิใน
                           </th>
-                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[48px]">
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[48px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
                             ความชื้น
                           </th>
-                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[48px]">
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[48px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
                             น้ำ
                           </th>
                         </React.Fragment>
@@ -859,25 +871,25 @@ export default function AdminDashboard() {
                           );
                           return (
                             <React.Fragment key={house}>
-                              <td className="border border-black px-1.5 py-1.5 text-center text-red-700">
+                              <td className="border border-black px-1.5 py-1.5 text-center text-red-700" style={{ backgroundColor: idx % 2 === 0 ? legacyHouseColors[house - 1].cell : legacyHouseColors[house - 1].cellAlt }}>
                                 {data.dead > 0 ? data.dead : ""}
                               </td>
-                              <td className="border border-black px-1.5 py-1.5 text-center text-orange-700">
+                              <td className="border border-black px-1.5 py-1.5 text-center text-orange-700" style={{ backgroundColor: idx % 2 === 0 ? legacyHouseColors[house - 1].cell : legacyHouseColors[house - 1].cellAlt }}>
                                 {data.culled > 0 ? data.culled : ""}
                               </td>
-                              <td className="border border-black px-1.5 py-1.5 text-center font-semibold">
+                              <td className="border border-black px-1.5 py-1.5 text-center font-semibold" style={{ backgroundColor: idx % 2 === 0 ? legacyHouseColors[house - 1].cell : legacyHouseColors[house - 1].cellAlt }}>
                                 {data.total > 0 ? data.total : ""}
                               </td>
-                              <td className="border border-black px-1.5 py-1.5 text-center">
+                              <td className="border border-black px-1.5 py-1.5 text-center" style={{ backgroundColor: idx % 2 === 0 ? legacyHouseColors[house - 1].cell : legacyHouseColors[house - 1].cellAlt }}>
                                 {record?.morning_temp_outside || "-"}
                               </td>
-                              <td className="border border-black px-1.5 py-1.5 text-center">
+                              <td className="border border-black px-1.5 py-1.5 text-center" style={{ backgroundColor: idx % 2 === 0 ? legacyHouseColors[house - 1].cell : legacyHouseColors[house - 1].cellAlt }}>
                                 {record?.morning_temp_inside || "-"}
                               </td>
-                              <td className="border border-black px-1.5 py-1.5 text-center">
+                              <td className="border border-black px-1.5 py-1.5 text-center" style={{ backgroundColor: idx % 2 === 0 ? legacyHouseColors[house - 1].cell : legacyHouseColors[house - 1].cellAlt }}>
                                 {record?.morning_humidity || "-"}
                               </td>
-                              <td className="border border-black px-1.5 py-1.5 text-center">
+                              <td className="border border-black px-1.5 py-1.5 text-center" style={{ backgroundColor: idx % 2 === 0 ? legacyHouseColors[house - 1].cell : legacyHouseColors[house - 1].cellAlt }}>
                                 {record?.morning_water_meter || "-"}
                               </td>
                             </React.Fragment>
@@ -897,18 +909,19 @@ export default function AdminDashboard() {
                         const data = houseTotals[house];
                         return (
                           <React.Fragment key={house}>
-                            <td className="border border-black px-1.5 py-2 text-center font-bold text-red-700">
+                            <td className="border border-black px-1.5 py-2 text-center font-bold text-red-700" style={{ backgroundColor: legacyHouseColors[house - 1].total }}>
                               {data.dead}
                             </td>
-                            <td className="border border-black px-1.5 py-2 text-center font-bold text-orange-700">
+                            <td className="border border-black px-1.5 py-2 text-center font-bold text-orange-700" style={{ backgroundColor: legacyHouseColors[house - 1].total }}>
                               {data.culled}
                             </td>
-                            <td className="border border-black px-1.5 py-2 text-center font-bold">
+                            <td className="border border-black px-1.5 py-2 text-center font-bold" style={{ backgroundColor: legacyHouseColors[house - 1].total }}>
                               {data.total}
                             </td>
                             <td
                               colSpan={4}
-                              className="border border-black px-1.5 py-2 text-center text-gray-400"
+                              className="border border-black px-1.5 py-2 text-center text-gray-500"
+                              style={{ backgroundColor: legacyHouseColors[house - 1].total }}
                             >
                               -
                             </td>
