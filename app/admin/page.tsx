@@ -47,7 +47,7 @@ export default function AdminDashboard() {
   const [newBatchName, setNewBatchName] = useState("");
   const [newBatchStartDate, setNewBatchStartDate] = useState("");
   const [newBatchInitialCount, setNewBatchInitialCount] = useState("");
-  const [legacyTableZoom, setLegacyTableZoom] = useState(0.72);
+  const [legacyTableZoom, setLegacyTableZoom] = useState(1);
   const legacyTableExportRef = useRef<HTMLDivElement | null>(null);
   const [exportingLegacyTable, setExportingLegacyTable] = useState(false);
 
@@ -680,33 +680,21 @@ export default function AdminDashboard() {
                                 รวม {data.total || 0}
                               </span>
                             </div>
-                            <div className="grid grid-cols-2 gap-2 mb-3 text-center">
+                            <div className="grid grid-cols-3 gap-2 mb-3 text-center">
                               <div className="rounded-lg bg-red-50 p-2">
-                                <p className="text-xs text-red-500">ตายเช้า</p>
+                                <p className="text-xs text-red-500">ตาย</p>
                                 <p className="font-bold text-red-700">
-                                  {record?.morning_dead ?? 0}
-                                </p>
-                              </div>
-                              <div className="rounded-lg bg-red-100 p-2">
-                                <p className="text-xs text-red-600">ตายบ่าย</p>
-                                <p className="font-bold text-red-800">
-                                  {record?.afternoon_dead ?? 0}
+                                  {data.dead || 0}
                                 </p>
                               </div>
                               <div className="rounded-lg bg-orange-50 p-2">
-                                <p className="text-xs text-orange-500">คัดเช้า</p>
+                                <p className="text-xs text-orange-500">คัด</p>
                                 <p className="font-bold text-orange-700">
-                                  {record?.morning_culled ?? 0}
+                                  {data.culled || 0}
                                 </p>
                               </div>
-                              <div className="rounded-lg bg-orange-100 p-2">
-                                <p className="text-xs text-orange-600">คัดบ่าย</p>
-                                <p className="font-bold text-orange-800">
-                                  {record?.afternoon_culled ?? 0}
-                                </p>
-                              </div>
-                              <div className="rounded-lg bg-gray-100 p-2 col-span-2">
-                                <p className="text-xs text-gray-500">รวมตาย/คัดทั้งวัน</p>
+                              <div className="rounded-lg bg-gray-100 p-2">
+                                <p className="text-xs text-gray-500">รวม</p>
                                 <p className="font-bold text-gray-900">
                                   {data.total || 0}
                                 </p>
@@ -803,22 +791,22 @@ export default function AdminDashboard() {
               <div className="overflow-x-auto max-h-[72vh] bg-gray-100 p-3">
                 <div
                   ref={legacyTableExportRef}
-                  className="inline-block origin-top-left bg-white"
+                  className="w-full origin-top-left bg-white"
                   style={{ zoom: legacyTableZoom } as React.CSSProperties}
                 >
-                  <table className="border-collapse text-[11px] leading-tight">
+                  <table className="w-full min-w-[1280px] table-fixed border-collapse text-[11px] leading-tight">
                   <thead className="sticky top-0 z-20">
                     <tr className="bg-yellow-400 border-b-2 border-black">
                       <th
                         rowSpan={2}
-                        className="sticky left-0 z-30 bg-yellow-400 border border-black px-2 py-2 text-center font-bold min-w-[72px]"
+                        className="sticky left-0 z-30 bg-yellow-400 border border-black px-2 py-2 text-center font-bold w-[82px]"
                       >
                         วันที่
                       </th>
                       {[1, 2, 3, 4, 5, 6, 7].map((house) => (
                         <th
                           key={house}
-                          colSpan={7}
+                          colSpan={5}
                           className="border border-black px-2 py-2 text-center font-bold"
                           style={{ backgroundColor: legacyHouseColors[house - 1].header }}
                         >
@@ -827,7 +815,7 @@ export default function AdminDashboard() {
                       ))}
                       <th
                         rowSpan={2}
-                        className="border border-black px-2 py-2 text-center font-bold bg-yellow-300 min-w-[56px]"
+                        className="border border-black px-2 py-2 text-center font-bold bg-yellow-300 w-[62px]"
                       >
                         รวม
                       </th>
@@ -835,26 +823,20 @@ export default function AdminDashboard() {
                     <tr className="bg-yellow-300 border-b-2 border-black">
                       {[1, 2, 3, 4, 5, 6, 7].map((house) => (
                         <React.Fragment key={house}>
-                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[36px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
-                            ตาย
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
+                            ตายเช้า
                           </th>
-                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[36px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
-                            คัด
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
+                            ตายบ่าย
                           </th>
-                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[36px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
+                            คัดเช้า
+                          </th>
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
+                            คัดบ่าย
+                          </th>
+                          <th className="border border-black px-1.5 py-1.5 text-center font-bold" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
                             รวม
-                          </th>
-                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[55px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
-                            อุณหภูมินอกเล้า
-                          </th>
-                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[55px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
-                            อุณหภูมิในเล้า
-                          </th>
-                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[48px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
-                            ความชื้น
-                          </th>
-                          <th className="border border-black px-1.5 py-1.5 text-center font-bold min-w-[48px]" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
-                            น้ำ
                           </th>
                         </React.Fragment>
                       ))}
@@ -872,34 +854,34 @@ export default function AdminDashboard() {
                           {day.dateDisplay}
                         </td>
                         {[1, 2, 3, 4, 5, 6, 7].map((house) => {
-                          const data = day.houses[house];
                           const record = records.find(
                             (r) =>
                               r.house_number === house &&
                               r.record_date === day.date,
                           );
+                          const morningDead = record?.morning_dead || 0;
+                          const afternoonDead = record?.afternoon_dead || 0;
+                          const morningCulled = record?.morning_culled || 0;
+                          const afternoonCulled = record?.afternoon_culled || 0;
+                          const rowTotal = morningDead + afternoonDead + morningCulled + afternoonCulled;
+                          const cellColor = idx % 2 === 0 ? legacyHouseColors[house - 1].cell : legacyHouseColors[house - 1].cellAlt;
+
                           return (
                             <React.Fragment key={house}>
-                              <td className="border border-black px-1.5 py-1.5 text-center text-red-700" style={{ backgroundColor: idx % 2 === 0 ? legacyHouseColors[house - 1].cell : legacyHouseColors[house - 1].cellAlt }}>
-                                {data.dead > 0 ? data.dead : ""}
+                              <td className="border border-black px-1.5 py-1.5 text-center text-red-700" style={{ backgroundColor: cellColor }}>
+                                {morningDead > 0 ? morningDead : ""}
                               </td>
-                              <td className="border border-black px-1.5 py-1.5 text-center text-orange-700" style={{ backgroundColor: idx % 2 === 0 ? legacyHouseColors[house - 1].cell : legacyHouseColors[house - 1].cellAlt }}>
-                                {data.culled > 0 ? data.culled : ""}
+                              <td className="border border-black px-1.5 py-1.5 text-center text-red-700" style={{ backgroundColor: cellColor }}>
+                                {afternoonDead > 0 ? afternoonDead : ""}
                               </td>
-                              <td className="border border-black px-1.5 py-1.5 text-center font-semibold" style={{ backgroundColor: idx % 2 === 0 ? legacyHouseColors[house - 1].cell : legacyHouseColors[house - 1].cellAlt }}>
-                                {data.total > 0 ? data.total : ""}
+                              <td className="border border-black px-1.5 py-1.5 text-center text-orange-700" style={{ backgroundColor: cellColor }}>
+                                {morningCulled > 0 ? morningCulled : ""}
                               </td>
-                              <td className="border border-black px-1.5 py-1.5 text-center" style={{ backgroundColor: idx % 2 === 0 ? legacyHouseColors[house - 1].cell : legacyHouseColors[house - 1].cellAlt }}>
-                                {record?.morning_temp_outside || "-"}
+                              <td className="border border-black px-1.5 py-1.5 text-center text-orange-700" style={{ backgroundColor: cellColor }}>
+                                {afternoonCulled > 0 ? afternoonCulled : ""}
                               </td>
-                              <td className="border border-black px-1.5 py-1.5 text-center" style={{ backgroundColor: idx % 2 === 0 ? legacyHouseColors[house - 1].cell : legacyHouseColors[house - 1].cellAlt }}>
-                                {record?.morning_temp_inside || "-"}
-                              </td>
-                              <td className="border border-black px-1.5 py-1.5 text-center" style={{ backgroundColor: idx % 2 === 0 ? legacyHouseColors[house - 1].cell : legacyHouseColors[house - 1].cellAlt }}>
-                                {record?.morning_humidity || "-"}
-                              </td>
-                              <td className="border border-black px-1.5 py-1.5 text-center" style={{ backgroundColor: idx % 2 === 0 ? legacyHouseColors[house - 1].cell : legacyHouseColors[house - 1].cellAlt }}>
-                                {record?.morning_water_meter || "-"}
+                              <td className="border border-black px-1.5 py-1.5 text-center font-semibold" style={{ backgroundColor: cellColor }}>
+                                {rowTotal > 0 ? rowTotal : ""}
                               </td>
                             </React.Fragment>
                           );
@@ -915,24 +897,29 @@ export default function AdminDashboard() {
                         รวม
                       </td>
                       {[1, 2, 3, 4, 5, 6, 7].map((house) => {
-                        const data = houseTotals[house];
+                        const houseRecords = records.filter((r) => r.house_number === house);
+                        const morningDeadTotal = houseRecords.reduce((sum, r) => sum + (r.morning_dead || 0), 0);
+                        const afternoonDeadTotal = houseRecords.reduce((sum, r) => sum + (r.afternoon_dead || 0), 0);
+                        const morningCulledTotal = houseRecords.reduce((sum, r) => sum + (r.morning_culled || 0), 0);
+                        const afternoonCulledTotal = houseRecords.reduce((sum, r) => sum + (r.afternoon_culled || 0), 0);
+                        const houseGrandTotal = morningDeadTotal + afternoonDeadTotal + morningCulledTotal + afternoonCulledTotal;
+
                         return (
                           <React.Fragment key={house}>
                             <td className="border border-black px-1.5 py-2 text-center font-bold text-red-700" style={{ backgroundColor: legacyHouseColors[house - 1].total }}>
-                              {data.dead}
+                              {morningDeadTotal}
+                            </td>
+                            <td className="border border-black px-1.5 py-2 text-center font-bold text-red-700" style={{ backgroundColor: legacyHouseColors[house - 1].total }}>
+                              {afternoonDeadTotal}
                             </td>
                             <td className="border border-black px-1.5 py-2 text-center font-bold text-orange-700" style={{ backgroundColor: legacyHouseColors[house - 1].total }}>
-                              {data.culled}
+                              {morningCulledTotal}
+                            </td>
+                            <td className="border border-black px-1.5 py-2 text-center font-bold text-orange-700" style={{ backgroundColor: legacyHouseColors[house - 1].total }}>
+                              {afternoonCulledTotal}
                             </td>
                             <td className="border border-black px-1.5 py-2 text-center font-bold" style={{ backgroundColor: legacyHouseColors[house - 1].total }}>
-                              {data.total}
-                            </td>
-                            <td
-                              colSpan={4}
-                              className="border border-black px-1.5 py-2 text-center text-gray-500"
-                              style={{ backgroundColor: legacyHouseColors[house - 1].total }}
-                            >
-                              -
+                              {houseGrandTotal}
                             </td>
                           </React.Fragment>
                         );
@@ -947,7 +934,7 @@ export default function AdminDashboard() {
                         รวมตาย
                       </td>
                       <td
-                        colSpan={49}
+                        colSpan={36}
                         className="border border-black px-2 py-2 text-center font-bold text-red-700"
                       >
                         {grandTotalDead}
@@ -959,7 +946,7 @@ export default function AdminDashboard() {
                         รวมคัด
                       </td>
                       <td
-                        colSpan={49}
+                        colSpan={36}
                         className="border border-black px-2 py-2 text-center font-bold text-orange-700"
                       >
                         {grandTotalCulled}
@@ -971,7 +958,7 @@ export default function AdminDashboard() {
                         รวมตาย/คัด
                       </td>
                       <td
-                        colSpan={49}
+                        colSpan={36}
                         className="border border-black px-2 py-2 text-center font-bold text-lg"
                       >
                         {grandTotal}
