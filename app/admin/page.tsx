@@ -680,21 +680,33 @@ export default function AdminDashboard() {
                                 รวม {data.total || 0}
                               </span>
                             </div>
-                            <div className="grid grid-cols-3 gap-2 mb-3 text-center">
+                            <div className="grid grid-cols-2 gap-2 mb-3 text-center">
                               <div className="rounded-lg bg-red-50 p-2">
-                                <p className="text-xs text-red-500">ตาย</p>
+                                <p className="text-xs text-red-500">ตายเช้า</p>
                                 <p className="font-bold text-red-700">
-                                  {data.dead || 0}
+                                  {record?.morning_dead ?? 0}
+                                </p>
+                              </div>
+                              <div className="rounded-lg bg-red-100 p-2">
+                                <p className="text-xs text-red-600">ตายบ่าย</p>
+                                <p className="font-bold text-red-800">
+                                  {record?.afternoon_dead ?? 0}
                                 </p>
                               </div>
                               <div className="rounded-lg bg-orange-50 p-2">
-                                <p className="text-xs text-orange-500">คัด</p>
+                                <p className="text-xs text-orange-500">คัดเช้า</p>
                                 <p className="font-bold text-orange-700">
-                                  {data.culled || 0}
+                                  {record?.morning_culled ?? 0}
                                 </p>
                               </div>
-                              <div className="rounded-lg bg-gray-100 p-2">
-                                <p className="text-xs text-gray-500">รวม</p>
+                              <div className="rounded-lg bg-orange-100 p-2">
+                                <p className="text-xs text-orange-600">คัดบ่าย</p>
+                                <p className="font-bold text-orange-800">
+                                  {record?.afternoon_culled ?? 0}
+                                </p>
+                              </div>
+                              <div className="rounded-lg bg-gray-100 p-2 col-span-2">
+                                <p className="text-xs text-gray-500">รวมตาย/คัดทั้งวัน</p>
                                 <p className="font-bold text-gray-900">
                                   {data.total || 0}
                                 </p>
