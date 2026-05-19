@@ -794,7 +794,7 @@ export default function AdminDashboard() {
                   className="w-full origin-top-left bg-white"
                   style={{ zoom: legacyTableZoom } as React.CSSProperties}
                 >
-                  <table className="w-full min-w-[1280px] table-fixed border-collapse text-[11px] leading-tight">
+                  <table className="w-full min-w-full table-fixed border-collapse text-[11px] leading-tight">
                   <thead className="sticky top-0 z-20">
                     <tr className="bg-yellow-400 border-b-2 border-black">
                       <th
@@ -827,10 +827,10 @@ export default function AdminDashboard() {
                             ตายเช้า
                           </th>
                           <th className="border border-black px-1.5 py-1.5 text-center font-bold" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
-                            ตายบ่าย
+                            คัดเช้า
                           </th>
                           <th className="border border-black px-1.5 py-1.5 text-center font-bold" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
-                            คัดเช้า
+                            ตายบ่าย
                           </th>
                           <th className="border border-black px-1.5 py-1.5 text-center font-bold" style={{ backgroundColor: legacyHouseColors[house - 1].subHeader }}>
                             คัดบ่าย
@@ -859,35 +859,39 @@ export default function AdminDashboard() {
                               r.house_number === house &&
                               r.record_date === day.date,
                           );
-                          const morningDead = record?.morning_dead || 0;
-                          const afternoonDead = record?.afternoon_dead || 0;
-                          const morningCulled = record?.morning_culled || 0;
-                          const afternoonCulled = record?.afternoon_culled || 0;
-                          const rowTotal = morningDead + afternoonDead + morningCulled + afternoonCulled;
+                          const hasMorningRecord = Boolean(record?.morning_recorded_at);
+                          const hasAfternoonRecord = Boolean(record?.afternoon_recorded_at);
+                          const morningDead = record?.morning_dead ?? 0;
+                          const morningCulled = record?.morning_culled ?? 0;
+                          const afternoonDead = record?.afternoon_dead ?? 0;
+                          const afternoonCulled = record?.afternoon_culled ?? 0;
+                          const rowTotal =
+                            (hasMorningRecord ? morningDead + morningCulled : 0) +
+                            (hasAfternoonRecord ? afternoonDead + afternoonCulled : 0);
                           const cellColor = idx % 2 === 0 ? legacyHouseColors[house - 1].cell : legacyHouseColors[house - 1].cellAlt;
 
                           return (
                             <React.Fragment key={house}>
                               <td className="border border-black px-1.5 py-1.5 text-center text-red-700" style={{ backgroundColor: cellColor }}>
-                                {morningDead > 0 ? morningDead : ""}
+                                {hasMorningRecord ? morningDead : "-"}
+                              </td>
+                              <td className="border border-black px-1.5 py-1.5 text-center text-orange-700" style={{ backgroundColor: cellColor }}>
+                                {hasMorningRecord ? morningCulled : "-"}
                               </td>
                               <td className="border border-black px-1.5 py-1.5 text-center text-red-700" style={{ backgroundColor: cellColor }}>
-                                {afternoonDead > 0 ? afternoonDead : ""}
+                                {hasAfternoonRecord ? afternoonDead : "-"}
                               </td>
                               <td className="border border-black px-1.5 py-1.5 text-center text-orange-700" style={{ backgroundColor: cellColor }}>
-                                {morningCulled > 0 ? morningCulled : ""}
-                              </td>
-                              <td className="border border-black px-1.5 py-1.5 text-center text-orange-700" style={{ backgroundColor: cellColor }}>
-                                {afternoonCulled > 0 ? afternoonCulled : ""}
+                                {hasAfternoonRecord ? afternoonCulled : "-"}
                               </td>
                               <td className="border border-black px-1.5 py-1.5 text-center font-semibold" style={{ backgroundColor: cellColor }}>
-                                {rowTotal > 0 ? rowTotal : ""}
+                                {hasMorningRecord || hasAfternoonRecord ? rowTotal : "-"}
                               </td>
                             </React.Fragment>
                           );
                         })}
                         <td className="border border-black px-2 py-1.5 text-center font-bold bg-yellow-100">
-                          {day.grandTotal > 0 ? day.grandTotal : ""}
+                          {records.some((r) => r.record_date === day.date) ? day.grandTotal : "-"}
                         </td>
                       </tr>
                     ))}
@@ -899,21 +903,21 @@ export default function AdminDashboard() {
                       {[1, 2, 3, 4, 5, 6, 7].map((house) => {
                         const houseRecords = records.filter((r) => r.house_number === house);
                         const morningDeadTotal = houseRecords.reduce((sum, r) => sum + (r.morning_dead || 0), 0);
-                        const afternoonDeadTotal = houseRecords.reduce((sum, r) => sum + (r.afternoon_dead || 0), 0);
                         const morningCulledTotal = houseRecords.reduce((sum, r) => sum + (r.morning_culled || 0), 0);
+                        const afternoonDeadTotal = houseRecords.reduce((sum, r) => sum + (r.afternoon_dead || 0), 0);
                         const afternoonCulledTotal = houseRecords.reduce((sum, r) => sum + (r.afternoon_culled || 0), 0);
-                        const houseGrandTotal = morningDeadTotal + afternoonDeadTotal + morningCulledTotal + afternoonCulledTotal;
+                        const houseGrandTotal = morningDeadTotal + morningCulledTotal + afternoonDeadTotal + afternoonCulledTotal;
 
                         return (
                           <React.Fragment key={house}>
                             <td className="border border-black px-1.5 py-2 text-center font-bold text-red-700" style={{ backgroundColor: legacyHouseColors[house - 1].total }}>
                               {morningDeadTotal}
                             </td>
-                            <td className="border border-black px-1.5 py-2 text-center font-bold text-red-700" style={{ backgroundColor: legacyHouseColors[house - 1].total }}>
-                              {afternoonDeadTotal}
-                            </td>
                             <td className="border border-black px-1.5 py-2 text-center font-bold text-orange-700" style={{ backgroundColor: legacyHouseColors[house - 1].total }}>
                               {morningCulledTotal}
+                            </td>
+                            <td className="border border-black px-1.5 py-2 text-center font-bold text-red-700" style={{ backgroundColor: legacyHouseColors[house - 1].total }}>
+                              {afternoonDeadTotal}
                             </td>
                             <td className="border border-black px-1.5 py-2 text-center font-bold text-orange-700" style={{ backgroundColor: legacyHouseColors[house - 1].total }}>
                               {afternoonCulledTotal}
