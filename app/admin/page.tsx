@@ -800,7 +800,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="overflow-x-auto max-h-[72vh] bg-gray-100 p-3">
+              <div className="overflow-x-auto bg-gray-100 p-3">
                 <div
                   ref={legacyTableExportRef}
                   className="w-full origin-top-left bg-white"
