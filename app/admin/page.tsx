@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getCurrentUser, signOut, supabase } from "../lib/supabase";
-import { getTodayThailand, getNowThailand } from "../lib/dateUtils";
+import { getTodayThailand } from "../lib/dateUtils";
 import type { User, Batch, DailyRecord } from "../types";
 import { format, differenceInDays, addDays } from "date-fns";
 import { th } from "date-fns/locale";
@@ -31,11 +31,16 @@ interface ActivityLog {
   users?: { full_name: string; house_number: number | null };
 }
 
+interface AdminBatch extends Batch {
+  scheduled_end_date?: string | null;
+  closed_at?: string | null;
+}
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
-  const [activeBatch, setActiveBatch] = useState<Batch | null>(null);
-  const [allBatches, setAllBatches] = useState<Batch[]>([]);
+  const [activeBatch, setActiveBatch] = useState<AdminBatch | null>(null);
+  const [allBatches, setAllBatches] = useState<AdminBatch[]>([]);
   const [records, setRecords] = useState<DailyRecord[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +52,8 @@ export default function AdminDashboard() {
   const [newBatchName, setNewBatchName] = useState("");
   const [newBatchStartDate, setNewBatchStartDate] = useState("");
   const [newBatchInitialCount, setNewBatchInitialCount] = useState("");
+  const [scheduleCloseBatchId, setScheduleCloseBatchId] = useState<string | null>(null);
+  const [scheduledEndDate, setScheduledEndDate] = useState("");
   const [legacyTableZoom, setLegacyTableZoom] = useState(1);
   const legacyTableExportRef = useRef<HTMLDivElement | null>(null);
   const [exportingLegacyTable, setExportingLegacyTable] = useState(false);
@@ -74,6 +81,14 @@ export default function AdminDashboard() {
 
   const loadData = async () => {
     try {
+      const { error: scheduledCloseError } = await supabase.rpc(
+        "close_scheduled_batches",
+      );
+
+      if (scheduledCloseError) {
+        console.warn("Scheduled batch close check failed:", scheduledCloseError);
+      }
+
       const { data: batchesData } = await supabase
         .from("batches")
         .select("*")
@@ -128,10 +143,17 @@ export default function AdminDashboard() {
     try {
       // ปิดรุ่นเก่าก่อน
       if (activeBatch) {
-        await supabase
+        const { error: closeActiveError } = await supabase
           .from("batches")
-          .update({ is_active: false, end_date: getTodayThailand() })
+          .update({
+            is_active: false,
+            end_date: getTodayThailand(),
+            scheduled_end_date: null,
+            closed_at: new Date().toISOString(),
+          })
           .eq("id", activeBatch.id);
+
+        if (closeActiveError) throw closeActiveError;
       }
 
       // สร้างรุ่นใหม่
@@ -140,6 +162,8 @@ export default function AdminDashboard() {
         start_date: newBatchStartDate,
         initial_count: parseInt(newBatchInitialCount) || 0,
         is_active: true,
+        scheduled_end_date: null,
+        closed_at: null,
         created_by: user?.id,
       });
 
@@ -157,15 +181,72 @@ export default function AdminDashboard() {
   };
 
   const handleCloseBatch = async (batchId: string) => {
-    if (!confirm("ต้องการปิดรุ่นนี้หรือไม่?")) return;
+    if (!confirm("ต้องการปิดรุ่นนี้ทันทีหรือไม่?")) return;
 
     try {
-      await supabase
+      const { error } = await supabase
         .from("batches")
-        .update({ is_active: false, end_date: getTodayThailand() })
+        .update({
+          is_active: false,
+          end_date: getTodayThailand(),
+          scheduled_end_date: null,
+          closed_at: new Date().toISOString(),
+        })
         .eq("id", batchId);
 
+      if (error) throw error;
+
       alert("ปิดรุ่นสำเร็จ");
+      loadData();
+    } catch (error: any) {
+      alert("เกิดข้อผิดพลาด: " + error.message);
+    }
+  };
+
+  const handleScheduleCloseBatch = async (batchId: string) => {
+    if (!scheduledEndDate) {
+      alert("กรุณาเลือกวันที่ต้องการปิดรุ่น");
+      return;
+    }
+
+    if (
+      !confirm(`ต้องการตั้งเวลาปิดรุ่นในวันที่ ${scheduledEndDate} หรือไม่?`)
+    )
+      return;
+
+    try {
+      const { error } = await supabase
+        .from("batches")
+        .update({ scheduled_end_date: scheduledEndDate })
+        .eq("id", batchId);
+
+      if (error) throw error;
+
+      alert("ตั้งเวลาปิดรุ่นสำเร็จ");
+      setScheduleCloseBatchId(null);
+      setScheduledEndDate("");
+      loadData();
+    } catch (error: any) {
+      alert("เกิดข้อผิดพลาด: " + error.message);
+    }
+  };
+
+  const handleCancelScheduledCloseBatch = async (batchId: string) => {
+    if (!confirm("ต้องการยกเลิกเวลาปิดรุ่นนี้หรือไม่?")) return;
+
+    try {
+      const { error } = await supabase
+        .from("batches")
+        .update({ scheduled_end_date: null })
+        .eq("id", batchId);
+
+      if (error) throw error;
+
+      alert("ยกเลิกเวลาปิดรุ่นสำเร็จ");
+      if (scheduleCloseBatchId === batchId) {
+        setScheduleCloseBatchId(null);
+        setScheduledEndDate("");
+      }
       loadData();
     } catch (error: any) {
       alert("เกิดข้อผิดพลาด: " + error.message);
@@ -1238,6 +1319,43 @@ export default function AdminDashboard() {
               </div>
             )}
 
+            {scheduleCloseBatchId && (
+              <div className="bg-white rounded-lg shadow-sm p-6 border border-blue-200">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">
+                  ตั้งเวลาปิดรุ่น
+                </h3>
+                <div className="flex flex-col md:flex-row gap-3 md:items-end">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      วันที่ต้องการปิดรุ่น
+                    </label>
+                    <input
+                      type="date"
+                      value={scheduledEndDate}
+                      min={getTodayThailand()}
+                      onChange={(e) => setScheduledEndDate(e.target.value)}
+                      className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                    />
+                  </div>
+                  <button
+                    onClick={() => handleScheduleCloseBatch(scheduleCloseBatchId)}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
+                  >
+                    บันทึกเวลาปิด
+                  </button>
+                  <button
+                    onClick={() => {
+                      setScheduleCloseBatchId(null);
+                      setScheduledEndDate("");
+                    }}
+                    className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg transition"
+                  >
+                    ยกเลิก
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="bg-white rounded-lg shadow-sm overflow-hidden">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -1250,6 +1368,9 @@ export default function AdminDashboard() {
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       วันที่จบ
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      ตั้งเวลาปิด
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       สถานะ
@@ -1273,11 +1394,26 @@ export default function AdminDashboard() {
                           ? format(new Date(batch.end_date), "dd/MM/yyyy")
                           : "-"}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {batch.scheduled_end_date
+                          ? format(
+                              new Date(batch.scheduled_end_date),
+                              "dd/MM/yyyy",
+                            )
+                          : "-"}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {batch.is_active ? (
-                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                            กำลังใช้งาน
-                          </span>
+                          <div className="flex flex-col gap-1 items-start">
+                            <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                              กำลังใช้งาน
+                            </span>
+                            {batch.scheduled_end_date && (
+                              <span className="text-xs text-blue-600 font-medium">
+                                รอปิดตามกำหนด
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
                             สิ้นสุดแล้ว
@@ -1287,12 +1423,37 @@ export default function AdminDashboard() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <div className="flex space-x-3">
                           {batch.is_active && (
-                            <button
-                              onClick={() => handleCloseBatch(batch.id)}
-                              className="text-orange-600 hover:text-orange-900 font-medium"
-                            >
-                              ปิดรุ่น
-                            </button>
+                            <>
+                              <button
+                                onClick={() => handleCloseBatch(batch.id)}
+                                className="text-orange-600 hover:text-orange-900 font-medium"
+                              >
+                                ปิดทันที
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setScheduleCloseBatchId(batch.id);
+                                  setScheduledEndDate(
+                                    batch.scheduled_end_date || "",
+                                  );
+                                }}
+                                className="text-blue-600 hover:text-blue-900 font-medium"
+                              >
+                                {batch.scheduled_end_date
+                                  ? "แก้ไขเวลาปิด"
+                                  : "ตั้งเวลาปิด"}
+                              </button>
+                              {batch.scheduled_end_date && (
+                                <button
+                                  onClick={() =>
+                                    handleCancelScheduledCloseBatch(batch.id)
+                                  }
+                                  className="text-gray-600 hover:text-gray-900 font-medium"
+                                >
+                                  ยกเลิกเวลา
+                                </button>
+                              )}
+                            </>
                           )}
                           <button
                             onClick={() =>
