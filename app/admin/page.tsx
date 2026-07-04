@@ -58,6 +58,10 @@ export default function AdminDashboard() {
   const legacyTableExportRef = useRef<HTMLDivElement | null>(null);
   const [exportingLegacyTable, setExportingLegacyTable] = useState(false);
 
+  // รุ่นที่กำลังดูอยู่ในแท็บ "ตารางสรุป" / "กราฟสรุป" (อาจเป็นรุ่นที่ปิดไปแล้วก็ได้)
+  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
+  const [recordsLoading, setRecordsLoading] = useState(false);
+
   const legacyHouseColors = [
     { header: "#fecaca", subHeader: "#fee2e2", cell: "#fff1f2", cellAlt: "#ffe4e6", total: "#fecaca" },
     { header: "#fed7aa", subHeader: "#ffedd5", cell: "#fff7ed", cellAlt: "#ffedd5", total: "#fed7aa" },
@@ -68,7 +72,6 @@ export default function AdminDashboard() {
     { header: "#ddd6fe", subHeader: "#ede9fe", cell: "#f5f3ff", cellAlt: "#ede9fe", total: "#ddd6fe" },
   ];
 
-
   useEffect(() => {
     const currentUser = getCurrentUser();
     if (!currentUser || currentUser.role !== "admin") {
@@ -77,6 +80,7 @@ export default function AdminDashboard() {
     }
     setUser(currentUser);
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   const loadData = async () => {
@@ -99,13 +103,28 @@ export default function AdminDashboard() {
         const active = batchesData.find((b) => b.is_active);
         setActiveBatch(active || null);
 
-        if (active) {
+        // เลือกรุ่นที่จะแสดงผล: ถ้าผู้ใช้เลือกรุ่นไว้แล้วและรุ่นนั้นยังมีอยู่ ให้คงไว้ตามเดิม
+        // (ไม่สลับกลับไปที่รุ่นปัจจุบันทันทีที่ปิดรุ่น) ไม่เช่นนั้นให้ตั้งค่าเริ่มต้นเป็นรุ่นที่ใช้งานอยู่
+        // หรือรุ่นล่าสุดถ้าไม่มีรุ่นที่ใช้งานอยู่เลย
+        const stillExists =
+          selectedBatchId && batchesData.some((b) => b.id === selectedBatchId);
+        const targetBatchId = stillExists
+          ? selectedBatchId
+          : active?.id || batchesData[0]?.id || null;
+
+        if (targetBatchId !== selectedBatchId) {
+          setSelectedBatchId(targetBatchId);
+        }
+
+        if (targetBatchId) {
           const { data: recordsData } = await supabase
             .from("daily_records")
             .select("*")
-            .eq("batch_id", active.id)
+            .eq("batch_id", targetBatchId)
             .order("record_date", { ascending: true });
           setRecords(recordsData || []);
+        } else {
+          setRecords([]);
         }
       }
 
@@ -127,6 +146,33 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // โหลดข้อมูล daily_records สำหรับรุ่นที่เลือกดู (ใช้ตอนผู้ใช้สลับรุ่นในตัวเลือก)
+  const handleSelectViewBatch = async (batchId: string) => {
+    if (!batchId) return;
+    setSelectedBatchId(batchId);
+    setRecordsLoading(true);
+    try {
+      const { data: recordsData, error } = await supabase
+        .from("daily_records")
+        .select("*")
+        .eq("batch_id", batchId)
+        .order("record_date", { ascending: true });
+
+      if (error) throw error;
+      setRecords(recordsData || []);
+    } catch (error) {
+      console.error("Error loading records for selected batch:", error);
+    } finally {
+      setRecordsLoading(false);
+    }
+  };
+
+  // ใช้จากแท็บ "จัดการรุ่น" เพื่อกดดูสรุปของรุ่นใดรุ่นหนึ่งโดยตรง
+  const handleViewBatchSummary = async (batchId: string) => {
+    await handleSelectViewBatch(batchId);
+    setActiveTab("summary");
   };
 
   const handleLogout = () => {
@@ -157,15 +203,19 @@ export default function AdminDashboard() {
       }
 
       // สร้างรุ่นใหม่
-      const { error } = await supabase.from("batches").insert({
-        batch_name: newBatchName,
-        start_date: newBatchStartDate,
-        initial_count: parseInt(newBatchInitialCount) || 0,
-        is_active: true,
-        scheduled_end_date: null,
-        closed_at: null,
-        created_by: user?.id,
-      });
+      const { data: insertedBatch, error } = await supabase
+        .from("batches")
+        .insert({
+          batch_name: newBatchName,
+          start_date: newBatchStartDate,
+          initial_count: parseInt(newBatchInitialCount) || 0,
+          is_active: true,
+          scheduled_end_date: null,
+          closed_at: null,
+          created_by: user?.id,
+        })
+        .select()
+        .single();
 
       if (error) throw error;
 
@@ -174,6 +224,10 @@ export default function AdminDashboard() {
       setNewBatchName("");
       setNewBatchStartDate("");
       setNewBatchInitialCount("");
+      // สลับไปดูรุ่นใหม่ที่เพิ่งสร้างโดยอัตโนมัติ
+      if (insertedBatch) {
+        setSelectedBatchId(insertedBatch.id);
+      }
       loadData();
     } catch (error: any) {
       alert("เกิดข้อผิดพลาด: " + error.message);
@@ -270,12 +324,15 @@ export default function AdminDashboard() {
       if (error) throw error;
 
       alert("ลบรุ่นสำเร็จ");
+      // ถ้าลบรุ่นที่กำลังดูอยู่ ให้เคลียร์ selection เพื่อให้ loadData เลือกรุ่นใหม่ให้เอง
+      if (selectedBatchId === batchId) {
+        setSelectedBatchId(null);
+      }
       loadData();
     } catch (error: any) {
       alert("เกิดข้อผิดพลาด: " + error.message);
     }
   };
-
 
   const handleExportLegacyTableImage = async () => {
     const element = legacyTableExportRef.current;
@@ -299,7 +356,7 @@ export default function AdminDashboard() {
       });
 
       const link = document.createElement("a");
-      link.download = `ตารางข้อมูลเดิม-${activeBatch?.batch_name || "batch"}-${getTodayThailand()}.png`;
+      link.download = `ตารางข้อมูลเดิม-${viewingBatch?.batch_name || "batch"}-${getTodayThailand()}.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
     } catch (error) {
@@ -312,12 +369,21 @@ export default function AdminDashboard() {
     }
   };
 
-  const calculateDailySummary = () => {
-    if (!activeBatch) return [];
+  // รุ่นที่กำลังแสดงผลอยู่ในแท็บตารางสรุป/กราฟสรุป (ค่าเริ่มต้นคือรุ่นที่ใช้งานอยู่ ถ้าไม่ได้เลือกรุ่นอื่น)
+  const viewingBatch: AdminBatch | null =
+    allBatches.find((b) => b.id === selectedBatchId) || activeBatch;
 
-    const startDate = new Date(activeBatch.start_date);
+  const calculateDailySummary = () => {
+    if (!viewingBatch) return [];
+
+    const startDate = new Date(viewingBatch.start_date);
+    const endReference = viewingBatch.end_date
+      ? new Date(viewingBatch.end_date)
+      : new Date(getTodayThailand());
     const today = new Date(getTodayThailand());
-    const days = differenceInDays(today, startDate) + 1;
+    // ถ้ารุ่นปิดไปแล้ว ให้แสดงถึงวันที่ปิดรุ่น ไม่ใช่วันปัจจุบัน
+    const lastDate = viewingBatch.end_date && endReference < today ? endReference : today;
+    const days = differenceInDays(lastDate, startDate) + 1;
     const summary: any[] = [];
 
     for (let day = 0; day < days; day++) {
@@ -434,6 +500,29 @@ export default function AdminDashboard() {
   );
   const grandTotal = grandTotalDead + grandTotalCulled;
 
+  // ตัวเลือกรุ่นสำหรับ dropdown เรียงรุ่นที่ใช้งานอยู่ขึ้นก่อน ตามด้วยรุ่นที่ปิดแล้วเรียงจากใหม่ไปเก่า
+  const batchOptions = [...allBatches].sort((a, b) => {
+    if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+    return (
+      new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
+    );
+  });
+
+  const BatchSelector = () => (
+    <select
+      value={selectedBatchId || ""}
+      onChange={(e) => handleSelectViewBatch(e.target.value)}
+      disabled={recordsLoading}
+      className="px-4 py-3 rounded-xl bg-white/15 border border-white/30 text-white font-semibold outline-none disabled:opacity-60 [&>option]:text-gray-900 [&>option]:bg-white"
+    >
+      {batchOptions.map((b) => (
+        <option key={b.id} value={b.id}>
+          {b.batch_name} {b.is_active ? "(กำลังใช้งาน)" : "(ปิดแล้ว)"}
+        </option>
+      ))}
+    </select>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b-2 border-gray-200">
@@ -513,36 +602,52 @@ export default function AdminDashboard() {
       </div>
 
       <main className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === "summary" && activeBatch && (
+        {activeTab === "summary" && viewingBatch && (
           <div className="space-y-6">
             <div className="bg-gradient-to-br from-blue-600 to-blue-700 rounded-2xl p-5 md:p-6 text-white shadow-sm">
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                 <div>
                   <p className="text-blue-100 text-sm font-semibold mb-1">
-                    ภาพรวมรุ่นปัจจุบัน
+                    {viewingBatch.is_active
+                      ? "ภาพรวมรุ่นปัจจุบัน"
+                      : "ภาพรวมรุ่นย้อนหลัง (ปิดแล้ว)"}
                   </p>
                   <h2 className="font-bold text-2xl md:text-3xl">
-                    สรุปไก่ตาย-ไก่คัด รุ่น {activeBatch.batch_name}
+                    สรุปไก่ตาย-ไก่คัด รุ่น {viewingBatch.batch_name}
                   </h2>
                   <p className="text-sm md:text-base text-blue-100 mt-2">
                     เริ่มวันที่:{" "}
-                    {format(new Date(activeBatch.start_date), "dd MMMM yyyy", {
+                    {format(new Date(viewingBatch.start_date), "dd MMMM yyyy", {
                       locale: th,
-                    })}{" "}
-                    (วันที่{" "}
+                    })}
+                    {viewingBatch.end_date && (
+                      <>
+                        {" "}
+                        ถึงวันที่:{" "}
+                        {format(new Date(viewingBatch.end_date), "dd MMMM yyyy", {
+                          locale: th,
+                        })}
+                      </>
+                    )}{" "}
+                    (รวม{" "}
                     {differenceInDays(
-                      new Date(getTodayThailand()),
-                      new Date(activeBatch.start_date),
-                    ) + 1}
-                    )
+                      viewingBatch.end_date
+                        ? new Date(viewingBatch.end_date)
+                        : new Date(getTodayThailand()),
+                      new Date(viewingBatch.start_date),
+                    ) + 1}{" "}
+                    วัน)
                   </p>
                 </div>
-                <button
-                  onClick={loadData}
-                  className="px-5 py-3 bg-white/15 hover:bg-white/25 border border-white/30 rounded-xl font-semibold transition"
-                >
-                  โหลดข้อมูลใหม่
-                </button>
+                <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                  <BatchSelector />
+                  <button
+                    onClick={loadData}
+                    className="px-5 py-3 bg-white/15 hover:bg-white/25 border border-white/30 rounded-xl font-semibold transition"
+                  >
+                    โหลดข้อมูลใหม่
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -552,7 +657,7 @@ export default function AdminDashboard() {
                   จำนวนเริ่มต้น
                 </p>
                 <p className="text-2xl md:text-3xl font-bold text-gray-900 mt-1">
-                  {activeBatch.initial_count?.toLocaleString() || 0}
+                  {viewingBatch.initial_count?.toLocaleString() || 0}
                 </p>
                 <p className="text-xs text-gray-400 mt-1">ตัว</p>
               </div>
@@ -589,7 +694,7 @@ export default function AdminDashboard() {
                 </p>
                 <p className="text-2xl md:text-3xl font-bold text-green-700 mt-1">
                   {Math.max(
-                    (activeBatch.initial_count || 0) - grandTotal,
+                    (viewingBatch.initial_count || 0) - grandTotal,
                     0,
                   ).toLocaleString()}
                 </p>
@@ -1069,12 +1174,34 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {activeTab === "chart" && activeBatch && (
+        {activeTab === "chart" && viewingBatch && (
           <div className="space-y-6">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <h2 className="font-semibold text-blue-900 text-lg">
-                กราฟสรุปรุ่น {activeBatch.batch_name}
+                กราฟสรุปรุ่น {viewingBatch.batch_name}
+                {!viewingBatch.is_active && (
+                  <span className="ml-2 text-sm font-normal text-blue-700">
+                    (ปิดแล้ว - ข้อมูลย้อนหลัง)
+                  </span>
+                )}
               </h2>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold text-blue-900">
+                  เลือกรุ่น:
+                </span>
+                <select
+                  value={selectedBatchId || ""}
+                  onChange={(e) => handleSelectViewBatch(e.target.value)}
+                  disabled={recordsLoading}
+                  className="px-3 py-2 rounded-lg bg-white border border-blue-300 text-blue-900 font-semibold outline-none disabled:opacity-60"
+                >
+                  {batchOptions.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.batch_name} {b.is_active ? "(กำลังใช้งาน)" : "(ปิดแล้ว)"}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <div className="bg-white rounded-lg shadow-sm p-6">
@@ -1158,7 +1285,7 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {(activeTab === "summary" || activeTab === "chart") && !activeBatch && (
+        {(activeTab === "summary" || activeTab === "chart") && !viewingBatch && (
           <div className="text-center bg-white p-12 rounded-lg shadow-sm">
             <svg
               className="w-16 h-16 text-gray-400 mx-auto mb-4"
@@ -1174,7 +1301,7 @@ export default function AdminDashboard() {
               />
             </svg>
             <h3 className="text-xl font-semibold text-gray-700 mb-2">
-              ยังไม่มีรุ่นที่เปิดใช้งาน
+              ยังไม่มีรุ่นใดในระบบ
             </h3>
             <p className="text-gray-500 mb-6">
               กรุณาสร้างรุ่นใหม่ในเมนู "จัดการรุ่น"
@@ -1382,7 +1509,12 @@ export default function AdminDashboard() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {allBatches.map((batch) => (
-                    <tr key={batch.id}>
+                    <tr
+                      key={batch.id}
+                      className={
+                        selectedBatchId === batch.id ? "bg-blue-50" : undefined
+                      }
+                    >
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                         {batch.batch_name}
                       </td>
@@ -1421,7 +1553,13 @@ export default function AdminDashboard() {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <div className="flex space-x-3">
+                        <div className="flex flex-wrap gap-3">
+                          <button
+                            onClick={() => handleViewBatchSummary(batch.id)}
+                            className="text-indigo-600 hover:text-indigo-900 font-medium"
+                          >
+                            ดูสรุป
+                          </button>
                           {batch.is_active && (
                             <>
                               <button
