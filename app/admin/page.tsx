@@ -60,6 +60,7 @@ export default function AdminDashboard() {
 
   // รุ่นที่กำลังดูอยู่ในแท็บ "ตารางสรุป" / "กราฟสรุป" (อาจเป็นรุ่นที่ปิดไปแล้วก็ได้)
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
+  const [selectedHouse, setSelectedHouse] = useState<number | null>(null);
   const [recordsLoading, setRecordsLoading] = useState(false);
 
   const legacyHouseColors = [
@@ -152,6 +153,7 @@ export default function AdminDashboard() {
   const handleSelectViewBatch = async (batchId: string) => {
     if (!batchId) return;
     setSelectedBatchId(batchId);
+    setSelectedHouse(null);
     setRecordsLoading(true);
     try {
       const { data: recordsData, error } = await supabase
@@ -173,6 +175,15 @@ export default function AdminDashboard() {
   const handleViewBatchSummary = async (batchId: string) => {
     await handleSelectViewBatch(batchId);
     setActiveTab("summary");
+  };
+
+  const handleViewHouseSummary = (house: number) => {
+    setSelectedHouse(house);
+    window.setTimeout(() => {
+      document
+        .getElementById("selected-house-summary")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
   };
 
   const handleLogout = () => {
@@ -477,6 +488,32 @@ export default function AdminDashboard() {
     }));
   };
 
+  const prepareSelectedHouseData = (house: number) => {
+    const todayDate = getTodayThailand();
+
+    return calculateDailySummary()
+      .filter((day) => day.date <= todayDate)
+      .map((day) => {
+        const record = records.find(
+          (r) => r.house_number === house && r.record_date === day.date,
+        );
+
+        return {
+          day: day.day,
+          date: day.date,
+          dateDisplay: day.dateDisplay,
+          dead: day.houses[house].dead,
+          culled: day.houses[house].culled,
+          total: day.houses[house].total,
+          tempOutside: record?.morning_temp_outside,
+          tempInside: record?.morning_temp_inside,
+          humidity: record?.morning_humidity,
+          waterMeter: record?.morning_water_meter,
+          hasRecord: Boolean(record),
+        };
+      });
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -499,6 +536,18 @@ export default function AdminDashboard() {
     0,
   );
   const grandTotal = grandTotalDead + grandTotalCulled;
+  const selectedHouseDailyData = selectedHouse
+    ? prepareSelectedHouseData(selectedHouse)
+    : [];
+  const selectedHouseTotal = selectedHouse ? houseTotals[selectedHouse] : null;
+  const selectedHouseAverageLoss = selectedHouseDailyData.length
+    ? (selectedHouseDailyData.reduce((sum, day) => sum + day.total, 0) /
+        selectedHouseDailyData.length).toFixed(1)
+    : "0.0";
+  const selectedHousePeakDay = selectedHouseDailyData.reduce<any | null>(
+    (peak, day) => (!peak || day.total > peak.total ? day : peak),
+    null,
+  );
 
   // ตัวเลือกรุ่นสำหรับ dropdown เรียงรุ่นที่ใช้งานอยู่ขึ้นก่อน ตามด้วยรุ่นที่ปิดแล้วเรียงจากใหม่ไปเก่า
   const batchOptions = [...allBatches].sort((a, b) => {
@@ -804,11 +853,192 @@ export default function AdminDashboard() {
                           </p>
                         </div>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => handleViewHouseSummary(house)}
+                        className="mt-4 w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2"
+                      >
+                        ดูข้อมูลเฉพาะเล้านี้
+                      </button>
                     </div>
                   );
                 })}
               </div>
             </div>
+
+            {selectedHouse && selectedHouseTotal && (
+              <section
+                id="selected-house-summary"
+                className="scroll-mt-6 space-y-6 rounded-2xl border border-blue-200 bg-blue-50/60 p-4 shadow-sm md:p-6"
+              >
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-blue-600">
+                      ข้อมูลเฉพาะเล้าในรุ่นนี้
+                    </p>
+                    <h3 className="mt-1 text-2xl font-bold text-gray-900">
+                      เล้า {selectedHouse} · รุ่น {viewingBatch.batch_name}
+                    </h3>
+                    <p className="mt-1 text-sm text-gray-500">
+                      แสดงเฉพาะข้อมูลของเล้า {selectedHouse} ตั้งแต่เริ่มรุ่นถึงวันที่ล่าสุด
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedHouse(null)}
+                    className="self-start rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-600 transition hover:bg-gray-50"
+                  >
+                    ปิดข้อมูลเฉพาะเล้า
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+                  <div className="rounded-2xl border border-red-100 bg-white p-4">
+                    <p className="text-xs font-semibold text-gray-500">ตายสะสม</p>
+                    <p className="mt-1 text-2xl font-bold text-red-600">
+                      {selectedHouseTotal.dead.toLocaleString()}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-400">ตัว</p>
+                  </div>
+                  <div className="rounded-2xl border border-orange-100 bg-white p-4">
+                    <p className="text-xs font-semibold text-gray-500">คัดสะสม</p>
+                    <p className="mt-1 text-2xl font-bold text-orange-600">
+                      {selectedHouseTotal.culled.toLocaleString()}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-400">ตัว</p>
+                  </div>
+                  <div className="rounded-2xl border border-yellow-100 bg-white p-4">
+                    <p className="text-xs font-semibold text-gray-500">สูญเสียรวม</p>
+                    <p className="mt-1 text-2xl font-bold text-yellow-700">
+                      {selectedHouseTotal.total.toLocaleString()}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-400">ตาย + คัด</p>
+                  </div>
+                  <div className="rounded-2xl border border-blue-100 bg-white p-4">
+                    <p className="text-xs font-semibold text-gray-500">เฉลี่ยต่อวัน</p>
+                    <p className="mt-1 text-2xl font-bold text-blue-700">
+                      {selectedHouseAverageLoss}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-400">ตัว/วัน</p>
+                  </div>
+                  <div className="col-span-2 rounded-2xl border border-purple-100 bg-white p-4 lg:col-span-1">
+                    <p className="text-xs font-semibold text-gray-500">วันที่สูญเสียสูงสุด</p>
+                    <p className="mt-1 text-2xl font-bold text-purple-700">
+                      {selectedHousePeakDay?.total || 0}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-400">
+                      {selectedHousePeakDay && selectedHousePeakDay.total > 0
+                        ? `${selectedHousePeakDay.dateDisplay} · วันที่ ${selectedHousePeakDay.day} ของรุ่น`
+                        : "ยังไม่มีการสูญเสีย"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 md:p-6">
+                  <div className="mb-4">
+                    <h4 className="text-lg font-bold text-gray-900">
+                      แนวโน้มการสูญเสียรายวัน
+                    </h4>
+                    <p className="text-sm text-gray-500">จำนวนตาย คัด และยอดรวมของเล้า {selectedHouse}</p>
+                  </div>
+                  <ResponsiveContainer width="100%" height={340}>
+                    <LineChart data={selectedHouseDailyData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="dateDisplay"
+                        angle={-35}
+                        textAnchor="end"
+                        height={80}
+                        minTickGap={16}
+                      />
+                      <YAxis allowDecimals={false} />
+                      <Tooltip />
+                      <Legend />
+                      <Line
+                        type="monotone"
+                        dataKey="dead"
+                        name="ตาย"
+                        stroke="#ef4444"
+                        strokeWidth={2}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="culled"
+                        name="คัด"
+                        stroke="#f97316"
+                        strokeWidth={2}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="total"
+                        name="รวมสูญเสีย"
+                        stroke="#2563eb"
+                        strokeWidth={3}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+
+                <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                  <div className="border-b border-gray-200 p-4 md:p-5">
+                    <h4 className="text-lg font-bold text-gray-900">
+                      ตารางข้อมูลรายวันของเล้า {selectedHouse}
+                    </h4>
+                    <p className="mt-1 text-sm text-gray-500">
+                      อุณหภูมิภายนอกและภายในเล้า ความชื้น และค่ามิเตอร์น้ำที่บันทึกในแต่ละวัน
+                    </p>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-[980px] w-full text-sm">
+                      <thead className="bg-gray-100 text-gray-700">
+                        <tr>
+                          <th className="px-4 py-3 text-left font-bold">วันที่</th>
+                          <th className="px-4 py-3 text-center font-bold">วันที่ของรุ่น</th>
+                          <th className="px-4 py-3 text-center font-bold text-red-700">ตาย</th>
+                          <th className="px-4 py-3 text-center font-bold text-orange-700">คัด</th>
+                          <th className="px-4 py-3 text-center font-bold">รวม</th>
+                          <th className="px-4 py-3 text-center font-bold">อุณหภูมินอกเล้า</th>
+                          <th className="px-4 py-3 text-center font-bold">อุณหภูมิในเล้า</th>
+                          <th className="px-4 py-3 text-center font-bold">ความชื้น</th>
+                          <th className="px-4 py-3 text-center font-bold">มิเตอร์น้ำ</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {selectedHouseDailyData.map((day) => (
+                          <tr key={day.date} className="hover:bg-blue-50/50">
+                            <td className="whitespace-nowrap px-4 py-3 font-semibold text-gray-800">
+                              {day.dateDisplay}
+                            </td>
+                            <td className="px-4 py-3 text-center text-gray-600">{day.day}</td>
+                            <td className="px-4 py-3 text-center font-semibold text-red-700">
+                              {day.hasRecord ? day.dead : "-"}
+                            </td>
+                            <td className="px-4 py-3 text-center font-semibold text-orange-700">
+                              {day.hasRecord ? day.culled : "-"}
+                            </td>
+                            <td className="px-4 py-3 text-center font-bold text-gray-900">
+                              {day.hasRecord ? day.total : "-"}
+                            </td>
+                            <td className="px-4 py-3 text-center text-gray-700">
+                              {day.tempOutside ?? "-"}{day.tempOutside != null ? " °C" : ""}
+                            </td>
+                            <td className="px-4 py-3 text-center text-gray-700">
+                              {day.tempInside ?? "-"}{day.tempInside != null ? " °C" : ""}
+                            </td>
+                            <td className="px-4 py-3 text-center text-gray-700">
+                              {day.humidity ?? "-"}{day.humidity != null ? " %" : ""}
+                            </td>
+                            <td className="px-4 py-3 text-center text-gray-700">
+                              {day.waterMeter ?? "-"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+            )}
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 md:p-6">
               <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
