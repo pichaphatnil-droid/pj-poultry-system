@@ -36,6 +36,8 @@ interface AdminBatch extends Batch {
   closed_at?: string | null;
 }
 
+type HouseChartMetric = "dead" | "culled" | "total";
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -61,6 +63,9 @@ export default function AdminDashboard() {
   // รุ่นที่กำลังดูอยู่ในแท็บ "ตารางสรุป" / "กราฟสรุป" (อาจเป็นรุ่นที่ปิดไปแล้วก็ได้)
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [selectedHouse, setSelectedHouse] = useState<number | null>(null);
+  const [visibleHouseMetrics, setVisibleHouseMetrics] = useState<
+    Record<HouseChartMetric, boolean>
+  >({ dead: true, culled: true, total: true });
   const [recordsLoading, setRecordsLoading] = useState(false);
 
   const legacyHouseColors = [
@@ -184,6 +189,17 @@ export default function AdminDashboard() {
         .getElementById("selected-house-summary")
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 50);
+  };
+
+  const handleToggleHouseMetric = (metric: HouseChartMetric) => {
+    setVisibleHouseMetrics((current) => {
+      const visibleCount = Object.values(current).filter(Boolean).length;
+
+      // ให้กราฟมีข้อมูลแสดงอย่างน้อย 1 เส้นเสมอ
+      if (current[metric] && visibleCount === 1) return current;
+
+      return { ...current, [metric]: !current[metric] };
+    });
   };
 
   const handleLogout = () => {
@@ -935,11 +951,51 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="rounded-2xl border border-gray-200 bg-white p-4 md:p-6">
-                  <div className="mb-4">
-                    <h4 className="text-lg font-bold text-gray-900">
-                      แนวโน้มการสูญเสียรายวัน
-                    </h4>
-                    <p className="text-sm text-gray-500">จำนวนตาย คัด และยอดรวมของเล้า {selectedHouse}</p>
+                  <div className="mb-4 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <h4 className="text-lg font-bold text-gray-900">
+                        แนวโน้มการสูญเสียรายวัน
+                      </h4>
+                      <p className="text-sm text-gray-500">
+                        เลือกเปิด–ปิดเส้นข้อมูลของเล้า {selectedHouse} ได้ตามต้องการ
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {([
+                        {
+                          key: "dead" as HouseChartMetric,
+                          label: "ตาย",
+                          activeClass: "border-red-600 bg-red-600 text-white",
+                        },
+                        {
+                          key: "culled" as HouseChartMetric,
+                          label: "คัด",
+                          activeClass: "border-orange-500 bg-orange-500 text-white",
+                        },
+                        {
+                          key: "total" as HouseChartMetric,
+                          label: "รวม",
+                          activeClass: "border-blue-600 bg-blue-600 text-white",
+                        },
+                      ]).map((option) => (
+                        <button
+                          key={option.key}
+                          type="button"
+                          aria-pressed={visibleHouseMetrics[option.key]}
+                          onClick={() => handleToggleHouseMetric(option.key)}
+                          className={`rounded-full border px-4 py-2 text-sm font-bold transition ${
+                            visibleHouseMetrics[option.key]
+                              ? option.activeClass
+                              : "border-gray-300 bg-white text-gray-500 hover:bg-gray-50"
+                          }`}
+                        >
+                          <span className="mr-1.5">
+                            {visibleHouseMetrics[option.key] ? "✓" : "○"}
+                          </span>
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <ResponsiveContainer width="100%" height={340}>
                     <LineChart data={selectedHouseDailyData}>
@@ -954,27 +1010,33 @@ export default function AdminDashboard() {
                       <YAxis allowDecimals={false} />
                       <Tooltip />
                       <Legend />
-                      <Line
-                        type="monotone"
-                        dataKey="dead"
-                        name="ตาย"
-                        stroke="#ef4444"
-                        strokeWidth={2}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="culled"
-                        name="คัด"
-                        stroke="#f97316"
-                        strokeWidth={2}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="total"
-                        name="รวมสูญเสีย"
-                        stroke="#2563eb"
-                        strokeWidth={3}
-                      />
+                      {visibleHouseMetrics.dead && (
+                        <Line
+                          type="monotone"
+                          dataKey="dead"
+                          name="ตาย"
+                          stroke="#ef4444"
+                          strokeWidth={2}
+                        />
+                      )}
+                      {visibleHouseMetrics.culled && (
+                        <Line
+                          type="monotone"
+                          dataKey="culled"
+                          name="คัด"
+                          stroke="#f97316"
+                          strokeWidth={2}
+                        />
+                      )}
+                      {visibleHouseMetrics.total && (
+                        <Line
+                          type="monotone"
+                          dataKey="total"
+                          name="รวมสูญเสีย"
+                          stroke="#2563eb"
+                          strokeWidth={3}
+                        />
+                      )}
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
