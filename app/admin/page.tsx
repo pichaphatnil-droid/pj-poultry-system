@@ -2658,7 +2658,7 @@ export default function AdminDashboard() {
                     น้ำหนักจริงรายสัปดาห์เทียบมาตรฐาน
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    กด ✏️ เมื่อต้องการแก้ไข · ค่า X = น้ำหนักจริง ÷ น้ำหนักแรกเข้า
+                    สีเขียว = ได้โบนัสตั้งแต่ 4.50 เท่า · ค่า X = น้ำหนักจริง ÷ น้ำหนักแรกเข้า
                   </p>
                 </div>
                 <div
@@ -2738,6 +2738,22 @@ export default function AdminDashboard() {
                             initialWeight > 0
                               ? actualWeight / initialWeight
                               : null;
+                          const roundedGrowthMultiple =
+                            growthMultiple == null
+                              ? null
+                              : Math.round(
+                                  (growthMultiple + Number.EPSILON) * 100,
+                                ) / 100;
+                          const bonusAmount =
+                            roundedGrowthMultiple == null
+                              ? 0
+                              : roundedGrowthMultiple >= 5
+                                ? 2200
+                                : roundedGrowthMultiple >= 4.8
+                                  ? 1600
+                                  : roundedGrowthMultiple >= 4.5
+                                    ? 1000
+                                    : 0;
 
                           return (
                             <td key={index} className="px-3 py-3 text-center">
@@ -2778,18 +2794,16 @@ export default function AdminDashboard() {
                               </p>
                               <p
                                 className={`min-h-4 text-[11px] font-semibold ${
-                                  difference == null
+                                  roundedGrowthMultiple == null
                                     ? "text-transparent"
-                                    : difference < 0
-                                      ? "text-red-600"
-                                      : difference > 0
-                                        ? "text-green-700"
-                                        : "text-blue-600"
+                                    : bonusAmount > 0
+                                      ? "text-green-700"
+                                      : "text-red-600"
                                 }`}
                               >
-                                {difference == null
+                                {roundedGrowthMultiple == null
                                   ? "-"
-                                  : `${difference >= 0 ? "+" : ""}${difference.toFixed(2)} กรัม${growthMultiple == null ? "" : ` · ${growthMultiple.toFixed(2)} เท่า`}`}
+                                  : `${difference == null ? "" : `${difference >= 0 ? "+" : ""}${difference.toFixed(2)} กรัม · `}${roundedGrowthMultiple.toFixed(2)} เท่า · ${bonusAmount > 0 ? `โบนัส ${bonusAmount.toLocaleString()} บาท` : "ไม่ได้โบนัส"}`}
                               </p>
                             </td>
                           );
