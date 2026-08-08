@@ -53,6 +53,31 @@ interface BatchHouseCount {
   weekly_weight_6: number | null;
 }
 
+interface WeightMeasurementSession {
+  batch_id: string;
+  house_number: number;
+  week_number: number;
+  sample_date: string | null;
+  birds_per_weighing: number;
+  basket_weight_kg: number;
+  deduction_per_bird_g: number;
+  feed_kg: number | null;
+  measurements: Array<[number | null, number | null]>;
+  total_weight_kg: number;
+  total_birds: number;
+  raw_average_g: number;
+  adjusted_average_g: number;
+}
+
+interface WeightCalculatorInput {
+  sampleDate: string;
+  birdsPerWeighing: string;
+  basketWeightKg: string;
+  deductionPerBirdG: string;
+  feedKg: string;
+  measurements: Record<string, [string, string]>;
+}
+
 type HouseChartMetric = "dead" | "culled" | "total";
 type ChickenSex = "male" | "female" | "mix";
 
@@ -85,6 +110,39 @@ const HOUSE_AREAS: Record<number, number> = {
 };
 const BATCH_HOUSE_SELECT =
   "batch_id, house_number, initial_count, arrival_date, capture_date, chicken_sex, breed, initial_weight, weekly_weight_1, weekly_weight_2, weekly_weight_3, weekly_weight_4, weekly_weight_5, weekly_weight_6";
+const WEIGHT_SESSION_SELECT =
+  "batch_id, house_number, week_number, sample_date, birds_per_weighing, basket_weight_kg, deduction_per_bird_g, feed_kg, measurements, total_weight_kg, total_birds, raw_average_g, adjusted_average_g";
+const DEFAULT_WEEKLY_FEED_KG: Record<number, number> = {
+  1: 6000,
+  2: 6500,
+  3: 6500,
+  4: 6500,
+  5: 6500,
+  6: 6000,
+  7: 6300,
+};
+const WEIGHING_POSITIONS = [
+  { key: "front_left", zone: "หน้า", side: "ซ้าย" },
+  { key: "front_center", zone: "หน้า", side: "กลาง" },
+  { key: "front_right", zone: "หน้า", side: "ขวา" },
+  { key: "middle_left", zone: "กลาง", side: "ซ้าย" },
+  { key: "middle_center", zone: "กลาง", side: "กลาง" },
+  { key: "middle_right", zone: "กลาง", side: "ขวา" },
+  { key: "rear_left", zone: "ท้าย", side: "ซ้าย" },
+  { key: "rear_center", zone: "ท้าย", side: "กลาง" },
+  { key: "rear_right", zone: "ท้าย", side: "ขวา" },
+] as const;
+const WEIGHT_SUMMARY_CARD_CLASSES: Record<string, string> = {
+  gray: "bg-gray-50 border-gray-200",
+  blue: "bg-blue-50 border-blue-100",
+  cyan: "bg-cyan-50 border-cyan-100",
+  amber: "bg-amber-50 border-amber-100",
+  emerald: "bg-emerald-50 border-emerald-100",
+  lime: "bg-lime-50 border-lime-100",
+  purple: "bg-purple-50 border-purple-100",
+  green: "bg-green-50 border-green-100",
+  red: "bg-red-50 border-red-100",
+};
 const WEIGHT_STANDARDS: Record<
   ChickenSex,
   { label: string; weights: readonly number[] }
@@ -130,6 +188,47 @@ const createWeeklyWeightInputs = (
   return inputs;
 };
 
+const createEmptyWeightCalculatorInput = (
+  house = 1,
+): WeightCalculatorInput => ({
+  sampleDate: getTodayThailand(),
+  birdsPerWeighing: "50",
+  basketWeightKg: "1",
+  deductionPerBirdG: "10",
+  feedKg: String(DEFAULT_WEEKLY_FEED_KG[house] || 0),
+  measurements: Object.fromEntries(
+    WEIGHING_POSITIONS.map((position) => [position.key, ["", ""]]),
+  ),
+});
+
+const createWeightCalculatorInput = (
+  session?: WeightMeasurementSession,
+  house = 1,
+): WeightCalculatorInput => {
+  if (!session) return createEmptyWeightCalculatorInput(house);
+
+  return {
+    sampleDate: session.sample_date || getTodayThailand(),
+    birdsPerWeighing: String(session.birds_per_weighing || 50),
+    basketWeightKg: String(session.basket_weight_kg ?? 1),
+    deductionPerBirdG: String(session.deduction_per_bird_g ?? 10),
+    feedKg: String(session.feed_kg ?? DEFAULT_WEEKLY_FEED_KG[house] ?? 0),
+    measurements: Object.fromEntries(
+      WEIGHING_POSITIONS.map((position, index) => [
+        position.key,
+        [
+          session.measurements?.[index]?.[0] == null
+            ? ""
+            : String(session.measurements[index][0]),
+          session.measurements?.[index]?.[1] == null
+            ? ""
+            : String(session.measurements[index][1]),
+        ],
+      ]),
+    ),
+  };
+};
+
 export default function AdminDashboard() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
@@ -139,7 +238,7 @@ export default function AdminDashboard() {
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<
-    "summary" | "chart" | "weekly" | "logs" | "users" | "batches"
+    "summary" | "chart" | "weekly" | "weight" | "logs" | "users" | "batches"
   >("summary");
   const [users, setUsers] = useState<User[]>([]);
   const [showBatchForm, setShowBatchForm] = useState(false);
@@ -172,6 +271,14 @@ export default function AdminDashboard() {
   >(createEmptyWeeklyWeightInputs);
   const [editingWeeklyWeights, setEditingWeeklyWeights] = useState(false);
   const [savingWeeklyWeights, setSavingWeeklyWeights] = useState(false);
+  const [weightSessions, setWeightSessions] = useState<
+    Record<string, WeightMeasurementSession>
+  >({});
+  const [weightCalculatorHouse, setWeightCalculatorHouse] = useState(1);
+  const [weightCalculatorWeek, setWeightCalculatorWeek] = useState(1);
+  const [weightCalculatorInput, setWeightCalculatorInput] =
+    useState<WeightCalculatorInput>(createEmptyWeightCalculatorInput);
+  const [savingWeightCalculator, setSavingWeightCalculator] = useState(false);
   const [scheduleCloseBatchId, setScheduleCloseBatchId] = useState<string | null>(null);
   const [scheduledEndDate, setScheduledEndDate] = useState("");
   const [legacyTableZoom, setLegacyTableZoom] = useState(1);
@@ -210,6 +317,16 @@ export default function AdminDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
+  useEffect(() => {
+    const sessionKey = `${weightCalculatorHouse}-${weightCalculatorWeek}`;
+    setWeightCalculatorInput(
+      createWeightCalculatorInput(
+        weightSessions[sessionKey],
+        weightCalculatorHouse,
+      ),
+    );
+  }, [weightCalculatorHouse, weightCalculatorWeek, weightSessions]);
+
   const loadData = async () => {
     try {
       const { error: scheduledCloseError } = await supabase.rpc(
@@ -244,7 +361,8 @@ export default function AdminDashboard() {
         }
 
         if (targetBatchId) {
-          const [recordsResult, houseCountsResult] = await Promise.all([
+          const [recordsResult, houseCountsResult, weightSessionsResult] =
+            await Promise.all([
             supabase
               .from("daily_records")
               .select("*")
@@ -255,7 +373,13 @@ export default function AdminDashboard() {
               .select(BATCH_HOUSE_SELECT)
               .eq("batch_id", targetBatchId)
               .order("house_number", { ascending: true }),
-          ]);
+            supabase
+              .from("batch_house_weight_sessions")
+              .select(WEIGHT_SESSION_SELECT)
+              .eq("batch_id", targetBatchId)
+              .order("house_number", { ascending: true })
+              .order("week_number", { ascending: true }),
+            ]);
 
           const recordsData = recordsResult.data;
           setRecords(recordsData || []);
@@ -271,11 +395,22 @@ export default function AdminDashboard() {
             ),
           );
           setWeeklyWeightInputs(createWeeklyWeightInputs(houseCountRows));
+          const weightSessionRows = (weightSessionsResult.data ||
+            []) as WeightMeasurementSession[];
+          setWeightSessions(
+            Object.fromEntries(
+              weightSessionRows.map((session) => [
+                `${session.house_number}-${session.week_number}`,
+                session,
+              ]),
+            ),
+          );
         } else {
           setRecords([]);
           setHouseInitialCounts({});
           setHousePerformanceData({});
           setWeeklyWeightInputs(createEmptyWeeklyWeightInputs());
+          setWeightSessions({});
         }
       }
 
@@ -307,7 +442,8 @@ export default function AdminDashboard() {
     setEditingWeeklyWeights(false);
     setRecordsLoading(true);
     try {
-      const [recordsResult, houseCountsResult] = await Promise.all([
+      const [recordsResult, houseCountsResult, weightSessionsResult] =
+        await Promise.all([
         supabase
           .from("daily_records")
           .select("*")
@@ -318,10 +454,17 @@ export default function AdminDashboard() {
           .select(BATCH_HOUSE_SELECT)
           .eq("batch_id", batchId)
           .order("house_number", { ascending: true }),
-      ]);
+        supabase
+          .from("batch_house_weight_sessions")
+          .select(WEIGHT_SESSION_SELECT)
+          .eq("batch_id", batchId)
+          .order("house_number", { ascending: true })
+          .order("week_number", { ascending: true }),
+        ]);
 
       if (recordsResult.error) throw recordsResult.error;
       if (houseCountsResult.error) throw houseCountsResult.error;
+      if (weightSessionsResult.error) throw weightSessionsResult.error;
 
       setRecords(recordsResult.data || []);
       const houseCountRows = (houseCountsResult.data || []) as BatchHouseCount[];
@@ -336,6 +479,16 @@ export default function AdminDashboard() {
         ),
       );
       setWeeklyWeightInputs(createWeeklyWeightInputs(houseCountRows));
+      const weightSessionRows = (weightSessionsResult.data ||
+        []) as WeightMeasurementSession[];
+      setWeightSessions(
+        Object.fromEntries(
+          weightSessionRows.map((session) => [
+            `${session.house_number}-${session.week_number}`,
+            session,
+          ]),
+        ),
+      );
     } catch (error) {
       console.error("Error loading records for selected batch:", error);
     } finally {
@@ -742,6 +895,256 @@ export default function AdminDashboard() {
       createWeeklyWeightInputs(Object.values(housePerformanceData)),
     );
     setEditingWeeklyWeights(false);
+  };
+
+  const calculateWeightCalculatorSummary = () => {
+    const birdsPerWeighing = Number.parseInt(
+      weightCalculatorInput.birdsPerWeighing,
+      10,
+    );
+    const basketWeightKg = Number.parseFloat(
+      weightCalculatorInput.basketWeightKg,
+    );
+    const deductionPerBirdG = Number.parseFloat(
+      weightCalculatorInput.deductionPerBirdG,
+    );
+    const feedKg = Number.parseFloat(weightCalculatorInput.feedKg);
+    const measurements = WEIGHING_POSITIONS.map((position) =>
+      weightCalculatorInput.measurements[position.key].map((value) => {
+        const parsed = Number.parseFloat(value);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+      }) as [number | null, number | null],
+    );
+    const completedReadings = measurements.flat().filter(
+      (value): value is number => value != null,
+    );
+    const grossWeightKg = completedReadings.reduce(
+      (sum, value) => sum + value,
+      0,
+    );
+    const basketTotalKg =
+      Number.isFinite(basketWeightKg) && basketWeightKg >= 0
+        ? completedReadings.length * basketWeightKg
+        : 0;
+    const netWeightKg = Math.max(0, grossWeightKg - basketTotalKg);
+    const totalBirds =
+      birdsPerWeighing > 0 ? completedReadings.length * birdsPerWeighing : 0;
+    const rawAverageG = totalBirds
+      ? (netWeightKg * 1000) / totalBirds
+      : null;
+    const adjustedAverageG =
+      rawAverageG == null || !Number.isFinite(deductionPerBirdG)
+        ? null
+        : Math.max(0, rawAverageG - Math.max(0, deductionPerBirdG));
+    const profile = housePerformanceData[weightCalculatorHouse];
+    const initialWeight = profile?.initial_weight;
+    const growthMultiple =
+      adjustedAverageG != null && initialWeight != null && initialWeight > 0
+        ? adjustedAverageG / initialWeight
+        : null;
+    const roundedGrowthMultiple =
+      growthMultiple == null
+        ? null
+        : Math.round((growthMultiple + Number.EPSILON) * 100) / 100;
+    const bonusAmount =
+      weightCalculatorWeek !== 1 || roundedGrowthMultiple == null
+        ? 0
+        : roundedGrowthMultiple >= 5
+          ? 2200
+          : roundedGrowthMultiple >= 4.8
+            ? 1600
+            : roundedGrowthMultiple >= 4.5
+              ? 1000
+              : 0;
+    const standardWeight = profile?.chicken_sex
+      ? WEIGHT_STANDARDS[profile.chicken_sex].weights[weightCalculatorWeek - 1]
+      : null;
+    const previousActualWeight =
+      weightCalculatorWeek === 1
+        ? initialWeight
+        : profile?.[WEEKLY_WEIGHT_FIELDS[weightCalculatorWeek - 2]];
+    const actualAdg =
+      adjustedAverageG != null && previousActualWeight != null
+        ? (adjustedAverageG - previousActualWeight) / 7
+        : null;
+    const previousStandardWeight =
+      weightCalculatorWeek === 1
+        ? initialWeight
+        : profile?.chicken_sex
+          ? WEIGHT_STANDARDS[profile.chicken_sex].weights[
+              weightCalculatorWeek - 2
+            ]
+          : null;
+    const standardAdg =
+      standardWeight != null && previousStandardWeight != null
+        ? (standardWeight - previousStandardWeight) / 7
+        : null;
+    const arrivalDate = profile?.arrival_date;
+    const weekEndDate = arrivalDate
+      ? format(
+          addDays(
+            new Date(`${arrivalDate}T00:00:00`),
+            weightCalculatorWeek * 7,
+          ),
+          "yyyy-MM-dd",
+        )
+      : null;
+    const cumulativeLoss = records
+      .filter(
+        (record) =>
+          record.house_number === weightCalculatorHouse &&
+          (!arrivalDate || record.record_date >= arrivalDate) &&
+          (!weekEndDate || record.record_date <= weekEndDate),
+      )
+      .reduce(
+        (sum, record) =>
+          sum +
+          (record.morning_dead || 0) +
+          (record.afternoon_dead || 0) +
+          (record.morning_culled || 0) +
+          (record.afternoon_culled || 0),
+        0,
+      );
+    const remainingChickens = Math.max(
+      0,
+      (profile?.initial_count || 0) - cumulativeLoss,
+    );
+    const feedPerBirdG =
+      Number.isFinite(feedKg) && feedKg > 0 && remainingChickens > 0
+        ? (feedKg * 1000) / remainingChickens
+        : null;
+    const farmFcr =
+      adjustedAverageG != null && feedPerBirdG != null && feedPerBirdG > 0
+        ? adjustedAverageG / feedPerBirdG
+        : null;
+
+    return {
+      birdsPerWeighing,
+      basketWeightKg,
+      deductionPerBirdG,
+      feedKg,
+      measurements,
+      completedReadings: completedReadings.length,
+      grossWeightKg,
+      basketTotalKg,
+      netWeightKg,
+      totalBirds,
+      rawAverageG,
+      adjustedAverageG,
+      growthMultiple,
+      roundedGrowthMultiple,
+      bonusAmount,
+      standardWeight,
+      actualAdg,
+      standardAdg,
+      cumulativeLoss,
+      remainingChickens,
+      feedPerBirdG,
+      farmFcr,
+      differenceFromStandard:
+        adjustedAverageG != null && standardWeight != null
+          ? adjustedAverageG - standardWeight
+          : null,
+    };
+  };
+
+  const handleSaveWeightCalculator = async () => {
+    if (!viewingBatch) return;
+
+    const summary = calculateWeightCalculatorSummary();
+    const profile = housePerformanceData[weightCalculatorHouse];
+
+    if (!profile) {
+      alert("กรุณาบันทึกข้อมูลประจำเล้าก่อนคำนวณน้ำหนัก");
+      return;
+    }
+    if (summary.completedReadings !== WEIGHING_POSITIONS.length * 2) {
+      alert("กรุณากรอกน้ำหนักให้ครบ 9 จุด จุดละ 2 ครั้ง รวม 18 ค่า");
+      return;
+    }
+    if (!(summary.birdsPerWeighing > 0)) {
+      alert("จำนวนไก่ต่อครั้งต้องมากกว่า 0");
+      return;
+    }
+    if (
+      !Number.isFinite(summary.basketWeightKg) ||
+      summary.basketWeightKg < 0 ||
+      !Number.isFinite(summary.deductionPerBirdG) ||
+      summary.deductionPerBirdG < 0 ||
+      !Number.isFinite(summary.feedKg) ||
+      summary.feedKg <= 0 ||
+      summary.rawAverageG == null ||
+      summary.rawAverageG <= 0 ||
+      summary.adjustedAverageG == null ||
+      summary.adjustedAverageG <= 0
+    ) {
+      alert("กรุณาตรวจสอบน้ำหนักรวม น้ำหนักตะกร้า น้ำหนักหักกระเพาะ และอาหารต่อสัปดาห์");
+      return;
+    }
+
+    setSavingWeightCalculator(true);
+    try {
+      const now = new Date().toISOString();
+      const adjustedAverageG = Number(summary.adjustedAverageG.toFixed(2));
+      const session: WeightMeasurementSession = {
+        batch_id: viewingBatch.id,
+        house_number: weightCalculatorHouse,
+        week_number: weightCalculatorWeek,
+        sample_date: weightCalculatorInput.sampleDate || null,
+        birds_per_weighing: summary.birdsPerWeighing,
+        basket_weight_kg: summary.basketWeightKg,
+        deduction_per_bird_g: summary.deductionPerBirdG,
+        feed_kg: summary.feedKg,
+        measurements: summary.measurements,
+        total_weight_kg: Number(summary.grossWeightKg.toFixed(3)),
+        total_birds: summary.totalBirds,
+        raw_average_g: Number(summary.rawAverageG!.toFixed(2)),
+        adjusted_average_g: adjustedAverageG,
+      };
+
+      const { error: sessionError } = await supabase
+        .from("batch_house_weight_sessions")
+        .upsert(
+          { ...session, updated_at: now },
+          { onConflict: "batch_id,house_number,week_number" },
+        );
+      if (sessionError) throw sessionError;
+
+      const weightField = WEEKLY_WEIGHT_FIELDS[weightCalculatorWeek - 1];
+      const { error: weightError } = await supabase
+        .from("batch_house_counts")
+        .update({ [weightField]: adjustedAverageG, updated_at: now })
+        .eq("batch_id", viewingBatch.id)
+        .eq("house_number", weightCalculatorHouse);
+      if (weightError) throw weightError;
+
+      const sessionKey = `${weightCalculatorHouse}-${weightCalculatorWeek}`;
+      setWeightSessions((current) => ({ ...current, [sessionKey]: session }));
+      setHousePerformanceData((current) => ({
+        ...current,
+        [weightCalculatorHouse]: {
+          ...current[weightCalculatorHouse],
+          [weightField]: adjustedAverageG,
+        } as BatchHouseCount,
+      }));
+      setWeeklyWeightInputs((current) => ({
+        ...current,
+        [weightCalculatorHouse]: current[weightCalculatorHouse].map(
+          (value, index) =>
+            index === weightCalculatorWeek - 1
+              ? adjustedAverageG.toFixed(2)
+              : value,
+        ),
+      }));
+
+      alert(
+        `บันทึกน้ำหนักเล้า ${weightCalculatorHouse} Wk${weightCalculatorWeek} = ${adjustedAverageG.toFixed(2)} กรัมแล้ว`,
+      );
+    } catch (error: any) {
+      alert("บันทึกผลชั่งไม่สำเร็จ: " + error.message);
+    } finally {
+      setSavingWeightCalculator(false);
+    }
   };
 
   const handleCloseBatch = async (batchId: string) => {
@@ -1261,6 +1664,125 @@ export default function AdminDashboard() {
       enteredWeights.length
     );
   });
+  const weightCalculatorSummary = calculateWeightCalculatorSummary();
+  const growthPerformanceRows = HOUSE_NUMBERS.map((house) => {
+    const profile = housePerformanceData[house];
+    const weeklyLossData = weeklyHousePerformance.find(
+      (item) => item.house === house,
+    );
+    const standards = profile?.chicken_sex
+      ? WEIGHT_STANDARDS[profile.chicken_sex].weights
+      : [];
+    const actualWeights = WEEKLY_WEIGHT_FIELDS.map(
+      (field) => profile?.[field] ?? null,
+    );
+    const weeks = WEEKLY_WEIGHT_FIELDS.map((_, index) => {
+      const actualWeight = actualWeights[index];
+      const previousActualWeight =
+        index === 0 ? profile?.initial_weight : actualWeights[index - 1];
+      const standardWeight = standards[index] ?? null;
+      const previousStandardWeight =
+        index === 0 ? profile?.initial_weight : standards[index - 1] ?? null;
+      const savedSession = weightSessions[`${house}-${index + 1}`];
+      const feedKg = Number(
+        savedSession?.feed_kg ?? DEFAULT_WEEKLY_FEED_KG[house] ?? 0,
+      );
+      const cumulativeLoss =
+        weeklyLossData?.weeks
+          .slice(0, index + 1)
+          .reduce((sum, week) => sum + week.total, 0) ?? 0;
+      const remainingChickens = Math.max(
+        0,
+        (profile?.initial_count || 0) - cumulativeLoss,
+      );
+      const feedPerBirdG =
+        feedKg > 0 && remainingChickens > 0
+          ? (feedKg * 1000) / remainingChickens
+          : null;
+      const farmFcr =
+        actualWeight != null && feedPerBirdG != null && feedPerBirdG > 0
+          ? Number(actualWeight) / feedPerBirdG
+          : null;
+
+      return {
+        week: index + 1,
+        actualWeight,
+        standardWeight,
+        actualAdg:
+          actualWeight != null && previousActualWeight != null
+            ? (actualWeight - previousActualWeight) / 7
+            : null,
+        standardAdg:
+          standardWeight != null && previousStandardWeight != null
+            ? (standardWeight - previousStandardWeight) / 7
+            : null,
+        feedKg,
+        remainingChickens,
+        feedPerBirdG,
+        farmFcr,
+      };
+    });
+
+    return { house, profile, weeks };
+  });
+  const growthWeeklyAverages = WEEKLY_WEIGHT_FIELDS.map((_, index) => {
+    const actualWeights = growthPerformanceRows
+      .map((row) => row.weeks[index].actualWeight)
+      .filter((value): value is number => value != null)
+      .map(Number)
+      .filter(Number.isFinite);
+    const actualAdgs = growthPerformanceRows
+      .map((row) => row.weeks[index].actualAdg)
+      .filter((value): value is number => value != null)
+      .map(Number)
+      .filter(Number.isFinite);
+    const standardWeights = growthPerformanceRows
+      .map((row) => row.weeks[index].standardWeight)
+      .filter((value): value is number => value != null)
+      .map(Number)
+      .filter(Number.isFinite);
+    const standardAdgs = growthPerformanceRows
+      .map((row) => row.weeks[index].standardAdg)
+      .filter((value): value is number => value != null)
+      .map(Number)
+      .filter(Number.isFinite);
+    const feedPerBirdValues = growthPerformanceRows
+      .map((row) => row.weeks[index].feedPerBirdG)
+      .filter((value): value is number => value != null)
+      .map(Number)
+      .filter(Number.isFinite);
+    const farmFcrValues = growthPerformanceRows
+      .map((row) => row.weeks[index].farmFcr)
+      .filter((value): value is number => value != null)
+      .map(Number)
+      .filter(Number.isFinite);
+
+    return {
+      actualWeight: actualWeights.length
+        ? actualWeights.reduce((sum, value) => sum + value, 0) /
+          actualWeights.length
+        : null,
+      actualAdg: actualAdgs.length
+        ? actualAdgs.reduce((sum, value) => sum + value, 0) / actualAdgs.length
+        : null,
+      standardWeight: standardWeights.length
+        ? standardWeights.reduce((sum, value) => sum + value, 0) /
+          standardWeights.length
+        : null,
+      standardAdg: standardAdgs.length
+        ? standardAdgs.reduce((sum, value) => sum + value, 0) /
+          standardAdgs.length
+        : null,
+      feedPerBirdG: feedPerBirdValues.length
+        ? feedPerBirdValues.reduce((sum, value) => sum + value, 0) /
+          feedPerBirdValues.length
+        : null,
+      farmFcr: farmFcrValues.length
+        ? farmFcrValues.reduce((sum, value) => sum + value, 0) /
+          farmFcrValues.length
+        : null,
+    };
+  });
 
   // ตัวเลือกรุ่นสำหรับ dropdown เรียงรุ่นที่ใช้งานอยู่ขึ้นก่อน ตามด้วยรุ่นที่ปิดแล้วเรียงจากใหม่ไปเก่า
   const batchOptions = [...allBatches].sort((a, b) => {
@@ -1477,6 +1999,16 @@ export default function AdminDashboard() {
               }`}
             >
               ประสิทธิภาพรายสัปดาห์
+            </button>
+            <button
+              onClick={() => setActiveTab("weight")}
+              className={`py-4 px-2 border-b-2 font-medium text-sm transition whitespace-nowrap ${
+                activeTab === "weight"
+                  ? "border-emerald-600 text-emerald-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              คำนวณน้ำหนัก
             </button>
             <button
               onClick={() => setActiveTab("logs")}
@@ -2658,7 +3190,7 @@ export default function AdminDashboard() {
                     น้ำหนักจริงรายสัปดาห์เทียบมาตรฐาน
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    สีเขียว = ได้โบนัสตั้งแต่ 4.50 เท่า · ค่า X = น้ำหนักจริง ÷ น้ำหนักแรกเข้า
+                    Wk1 สีเขียว = ได้โบนัสตั้งแต่ 4.50 เท่า · Wk2–Wk6 สีเขียว = ถึงมาตรฐาน · ค่า X = น้ำหนักจริง ÷ น้ำหนักแรกเข้า
                   </p>
                 </div>
                 <div
@@ -2744,8 +3276,9 @@ export default function AdminDashboard() {
                               : Math.round(
                                   (growthMultiple + Number.EPSILON) * 100,
                                 ) / 100;
+                          const isBonusWeek = index === 0;
                           const bonusAmount =
-                            roundedGrowthMultiple == null
+                            !isBonusWeek || roundedGrowthMultiple == null
                               ? 0
                               : roundedGrowthMultiple >= 5
                                 ? 2200
@@ -2796,14 +3329,18 @@ export default function AdminDashboard() {
                                 className={`min-h-4 text-[11px] font-semibold ${
                                   roundedGrowthMultiple == null
                                     ? "text-transparent"
-                                    : bonusAmount > 0
+                                    : isBonusWeek
+                                      ? bonusAmount > 0
+                                        ? "text-green-700"
+                                        : "text-red-600"
+                                      : difference != null && difference >= 0
                                       ? "text-green-700"
                                       : "text-red-600"
                                 }`}
                               >
                                 {roundedGrowthMultiple == null
                                   ? "-"
-                                  : `${difference == null ? "" : `${difference >= 0 ? "+" : ""}${difference.toFixed(2)} กรัม · `}${roundedGrowthMultiple.toFixed(2)} เท่า · ${bonusAmount > 0 ? `โบนัส ${bonusAmount.toLocaleString()} บาท` : "ไม่ได้โบนัส"}`}
+                                  : `${difference == null ? "" : `${difference >= 0 ? "+" : ""}${difference.toFixed(2)} กรัม · `}${roundedGrowthMultiple.toFixed(2)} เท่า${isBonusWeek ? ` · ${bonusAmount > 0 ? `โบนัส ${bonusAmount.toLocaleString()} บาท` : "ไม่ได้โบนัส"}` : ""}`}
                               </p>
                             </td>
                           );
@@ -2991,9 +3528,477 @@ export default function AdminDashboard() {
           </div>
         )}
 
+        {activeTab === "weight" && viewingBatch && (
+          <div className="space-y-6">
+            <div className="rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 p-5 text-white shadow-sm md:p-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-emerald-100">
+                    Weight & Growth Calculator
+                  </p>
+                  <h2 className="mt-1 text-2xl font-bold md:text-3xl">
+                    คำนวณน้ำหนักไก่และแสดงประสิทธิภาพ
+                  </h2>
+                  <p className="mt-2 text-sm text-emerald-100">
+                    ชั่ง 9 จุด จุดละ 2 ครั้ง · คำนวณน้ำหนักสุทธิ ADG ค่า X และโบนัสเฉพาะ Wk1
+                  </p>
+                </div>
+                <BatchSelector />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-7">
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-600">
+                    เล้า
+                  </label>
+                  <select
+                    value={weightCalculatorHouse}
+                    onChange={(event) =>
+                      setWeightCalculatorHouse(Number(event.target.value))
+                    }
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                  >
+                    {HOUSE_NUMBERS.map((house) => (
+                      <option key={house} value={house}>
+                        เล้า {house}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-600">
+                    สัปดาห์
+                  </label>
+                  <select
+                    value={weightCalculatorWeek}
+                    onChange={(event) =>
+                      setWeightCalculatorWeek(Number(event.target.value))
+                    }
+                    className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                  >
+                    {WEEKLY_WEIGHT_FIELDS.map((_, index) => (
+                      <option key={index} value={index + 1}>
+                        Wk{index + 1} · อายุ {(index + 1) * 7} วัน
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-600">
+                    วันที่ชั่ง
+                  </label>
+                  <input
+                    type="date"
+                    value={weightCalculatorInput.sampleDate}
+                    onChange={(event) =>
+                      setWeightCalculatorInput((current) => ({
+                        ...current,
+                        sampleDate: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-600">
+                    จำนวนไก่ต่อครั้ง
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={weightCalculatorInput.birdsPerWeighing}
+                    onChange={(event) =>
+                      setWeightCalculatorInput((current) => ({
+                        ...current,
+                        birdsPerWeighing: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-right font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-600">
+                    น้ำหนักตะกร้า/ครั้ง (กก.)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    value={weightCalculatorInput.basketWeightKg}
+                    onChange={(event) =>
+                      setWeightCalculatorInput((current) => ({
+                        ...current,
+                        basketWeightKg: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-right font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-600">
+                    หักกระเพาะ/ตัว (กรัม)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={weightCalculatorInput.deductionPerBirdG}
+                    onChange={(event) =>
+                      setWeightCalculatorInput((current) => ({
+                        ...current,
+                        deductionPerBirdG: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-right font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-600">
+                    อาหารต่อสัปดาห์ (กก.)
+                  </label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={weightCalculatorInput.feedKg}
+                    onChange={(event) =>
+                      setWeightCalculatorInput((current) => ({
+                        ...current,
+                        feedKg: event.target.value,
+                      }))
+                    }
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-right font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+              <div className="mb-4">
+                <h3 className="text-xl font-bold text-gray-900">
+                  น้ำหนักจากจุดชั่ง 9 จุด
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  กรอกน้ำหนักรวมตะกร้าเป็นกิโลกรัม ระบบจะหักน้ำหนักตะกร้าต่อครั้งและหักกระเพาะต่อไก่อัตโนมัติ
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {WEIGHING_POSITIONS.map((position) => {
+                  const values =
+                    weightCalculatorInput.measurements[position.key];
+                  const positionTotal = values.reduce(
+                    (sum, value) => sum + (Number.parseFloat(value) || 0),
+                    0,
+                  );
+
+                  return (
+                    <div
+                      key={position.key}
+                      className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4"
+                    >
+                      <div className="mb-3 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-semibold text-emerald-600">
+                            {position.zone}
+                          </p>
+                          <h4 className="text-lg font-bold text-gray-900">
+                            {position.side}
+                          </h4>
+                        </div>
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-emerald-700 shadow-sm">
+                          รวม {positionTotal.toFixed(2)} กก.
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        {[0, 1].map((roundIndex) => (
+                          <div key={roundIndex}>
+                            <label className="mb-1 block text-xs font-bold text-gray-500">
+                              ครั้งที่ {roundIndex + 1}
+                            </label>
+                            <input
+                              type="number"
+                              min="0.001"
+                              step="0.001"
+                              inputMode="decimal"
+                              value={values[roundIndex]}
+                              onChange={(event) => {
+                                const nextValue = event.target.value;
+                                setWeightCalculatorInput((current) => ({
+                                  ...current,
+                                  measurements: {
+                                    ...current.measurements,
+                                    [position.key]: current.measurements[
+                                      position.key
+                                    ].map((value, index) =>
+                                      index === roundIndex ? nextValue : value,
+                                    ) as [string, string],
+                                  },
+                                }));
+                              }}
+                              className="w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-right font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                              placeholder="0.000"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+              {[
+                {
+                  label: "กรอกแล้ว",
+                  value: `${weightCalculatorSummary.completedReadings}/18 ค่า`,
+                  color: "gray",
+                },
+                {
+                  label: "น้ำหนักรวมก่อนหัก",
+                  value: `${weightCalculatorSummary.grossWeightKg.toFixed(2)} กก.`,
+                  color: "blue",
+                },
+                {
+                  label: "หักตะกร้ารวม",
+                  value: `${weightCalculatorSummary.basketTotalKg.toFixed(2)} กก.`,
+                  color: "amber",
+                },
+                {
+                  label: "น้ำหนักหลังหักตะกร้า",
+                  value: `${weightCalculatorSummary.netWeightKg.toFixed(2)} กก.`,
+                  color: "emerald",
+                },
+                {
+                  label: "จำนวนที่ชั่ง",
+                  value: `${weightCalculatorSummary.totalBirds.toLocaleString()} ตัว`,
+                  color: "cyan",
+                },
+                {
+                  label: "เฉลี่ยก่อนหักกระเพาะ",
+                  value:
+                    weightCalculatorSummary.rawAverageG == null
+                      ? "-"
+                      : `${weightCalculatorSummary.rawAverageG.toFixed(2)} กรัม`,
+                  color: "amber",
+                },
+                {
+                  label: "น้ำหนักเฉลี่ยสุทธิ",
+                  value:
+                    weightCalculatorSummary.adjustedAverageG == null
+                      ? "-"
+                      : `${weightCalculatorSummary.adjustedAverageG.toFixed(2)} กรัม`,
+                  color: "emerald",
+                },
+                {
+                  label: "ไก่คงเหลือ",
+                  value: `${weightCalculatorSummary.remainingChickens.toLocaleString()} ตัว`,
+                  color: "cyan",
+                },
+                {
+                  label: "อาหารต่อไก่",
+                  value:
+                    weightCalculatorSummary.feedPerBirdG == null
+                      ? "-"
+                      : `${weightCalculatorSummary.feedPerBirdG.toFixed(2)} กรัม`,
+                  color: "blue",
+                },
+                {
+                  label: "FCR ฟาร์ม",
+                  value:
+                    weightCalculatorSummary.farmFcr == null
+                      ? "-"
+                      : weightCalculatorSummary.farmFcr.toFixed(2),
+                  color: "purple",
+                },
+                {
+                  label: "ADG",
+                  value:
+                    weightCalculatorSummary.actualAdg == null
+                      ? "-"
+                      : weightCalculatorSummary.actualAdg.toFixed(2),
+                  color: "lime",
+                },
+                {
+                  label: "ค่า X",
+                  value:
+                    weightCalculatorSummary.roundedGrowthMultiple == null
+                      ? "-"
+                      : `${weightCalculatorSummary.roundedGrowthMultiple.toFixed(2)} เท่า`,
+                  color: "purple",
+                },
+                {
+                  label: "โบนัส",
+                  value:
+                    weightCalculatorWeek !== 1
+                      ? "เฉพาะ Wk1"
+                      : weightCalculatorSummary.bonusAmount > 0
+                      ? `${weightCalculatorSummary.bonusAmount.toLocaleString()} บาท`
+                      : "ไม่ได้โบนัส",
+                  color:
+                    weightCalculatorWeek !== 1
+                      ? "gray"
+                      : weightCalculatorSummary.bonusAmount > 0
+                        ? "green"
+                        : "red",
+                },
+              ].map((card) => (
+                <div
+                  key={card.label}
+                  className={`rounded-2xl border p-4 text-center shadow-sm ${WEIGHT_SUMMARY_CARD_CLASSES[card.color]}`}
+                >
+                  <p className="text-xs font-semibold text-gray-500">
+                    {card.label}
+                  </p>
+                  <p className="mt-2 text-lg font-bold text-gray-900">
+                    {card.value}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 sm:flex-row sm:items-center sm:justify-between md:p-5">
+              <div>
+                <p className="font-bold text-emerald-900">
+                  มาตรฐาน Wk{weightCalculatorWeek}: {weightCalculatorSummary.standardWeight?.toLocaleString() || "-"} กรัม
+                </p>
+                <p className="mt-1 text-sm text-emerald-700">
+                  {weightCalculatorSummary.differenceFromStandard == null
+                    ? "กรอกข้อมูลให้ครบเพื่อดูผลเปรียบเทียบ"
+                    : `${weightCalculatorSummary.differenceFromStandard >= 0 ? "สูงกว่า" : "ต่ำกว่า"}มาตรฐาน ${Math.abs(weightCalculatorSummary.differenceFromStandard).toFixed(2)} กรัม · ADG มาตรฐาน ${weightCalculatorSummary.standardAdg?.toFixed(2) || "-"}`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveWeightCalculator}
+                disabled={savingWeightCalculator}
+                className="rounded-xl bg-emerald-600 px-6 py-3 font-bold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {savingWeightCalculator
+                  ? "กำลังบันทึก..."
+                  : "บันทึกผลชั่งและอัปเดตน้ำหนักรายสัปดาห์"}
+              </button>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <div className="border-b border-gray-200 p-4 md:p-5">
+                <h3 className="text-xl font-bold text-gray-900">
+                  ตารางแสดงการเจริญเติบโต
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  ADG = (น้ำหนักสัปดาห์ปัจจุบัน − น้ำหนักสัปดาห์ก่อน) ÷ 7 · FCR ฟาร์ม = น้ำหนักเฉลี่ย ÷ อาหารต่อไก่
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-[3300px] w-full text-xs">
+                  <thead>
+                    <tr className="bg-orange-50 text-orange-950">
+                      <th rowSpan={2} className="border border-gray-300 px-3 py-3">H</th>
+                      <th rowSpan={2} className="border border-gray-300 px-3 py-3">เพศ</th>
+                      {WEEKLY_WEIGHT_FIELDS.map((_, index) => (
+                        <th
+                          key={index}
+                          colSpan={6}
+                          className="border border-gray-300 px-3 py-3 text-center text-sm font-bold"
+                        >
+                          {(index + 1) * 7} วัน · Wk{index + 1}
+                        </th>
+                      ))}
+                    </tr>
+                    <tr className="bg-gray-100 text-gray-700">
+                      {WEEKLY_WEIGHT_FIELDS.flatMap((_, index) => [
+                        <th key={`${index}-actual`} className="border border-gray-300 px-3 py-2">น้ำหนักจริง</th>,
+                        <th key={`${index}-std`} className="border border-gray-300 px-3 py-2">AA Std</th>,
+                        <th key={`${index}-adg`} className="border border-gray-300 px-3 py-2">ADG</th>,
+                        <th key={`${index}-std-adg`} className="border border-gray-300 px-3 py-2">Std ADG</th>,
+                        <th key={`${index}-feed-bird`} className="border border-gray-300 px-3 py-2">อาหาร/ตัว</th>,
+                        <th key={`${index}-fcr`} className="border border-gray-300 px-3 py-2">FCR</th>,
+                      ])}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {growthPerformanceRows.map((row) => (
+                      <tr key={row.house}>
+                        <td className="border border-gray-300 bg-amber-100 px-3 py-3 text-center text-base font-bold">
+                          {row.house}
+                        </td>
+                        <td className="border border-gray-300 px-3 py-3 text-center font-semibold">
+                          {row.profile?.chicken_sex
+                            ? WEIGHT_STANDARDS[row.profile.chicken_sex].label
+                            : "-"}
+                        </td>
+                        {row.weeks.flatMap((week) => {
+                          const weightPassed =
+                            week.actualWeight != null &&
+                            week.standardWeight != null &&
+                            week.actualWeight >= week.standardWeight;
+                          const adgPassed =
+                            week.actualAdg != null &&
+                            week.standardAdg != null &&
+                            week.actualAdg >= week.standardAdg;
+
+                          return [
+                            <td key={`${week.week}-actual`} className={`border border-gray-300 px-3 py-3 text-center font-bold ${week.actualWeight == null ? "text-gray-400" : weightPassed ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                              {week.actualWeight == null ? "-" : Number(week.actualWeight).toFixed(2)}
+                            </td>,
+                            <td key={`${week.week}-std`} className="border border-gray-300 bg-orange-50 px-3 py-3 text-center font-semibold">
+                              {week.standardWeight?.toLocaleString() || "-"}
+                            </td>,
+                            <td key={`${week.week}-adg`} className={`border border-gray-300 px-3 py-3 text-center font-bold ${week.actualAdg == null ? "text-gray-400" : adgPassed ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                              {week.actualAdg == null ? "-" : week.actualAdg.toFixed(2)}
+                            </td>,
+                            <td key={`${week.week}-std-adg`} className="border border-gray-300 bg-orange-50 px-3 py-3 text-center">
+                              {week.standardAdg == null ? "-" : week.standardAdg.toFixed(2)}
+                            </td>,
+                            <td key={`${week.week}-feed-bird`} className="border border-gray-300 bg-blue-50 px-3 py-3 text-center font-semibold">
+                              {week.feedPerBirdG == null ? "-" : week.feedPerBirdG.toFixed(2)}
+                            </td>,
+                            <td key={`${week.week}-fcr`} className="border border-gray-300 bg-purple-50 px-3 py-3 text-center font-bold text-purple-800">
+                              {week.farmFcr == null ? "-" : week.farmFcr.toFixed(2)}
+                            </td>,
+                          ];
+                        })}
+                      </tr>
+                    ))}
+                    <tr className="bg-gray-900 text-white">
+                      <td colSpan={2} className="border border-gray-700 px-3 py-4 text-center font-bold">
+                        เฉลี่ย
+                      </td>
+                      {growthWeeklyAverages.flatMap((average, index) => [
+                        <td key={`${index}-actual`} className="border border-gray-700 px-3 py-4 text-center font-bold">
+                          {average.actualWeight == null ? "-" : average.actualWeight.toFixed(2)}
+                        </td>,
+                        <td key={`${index}-std`} className="border border-gray-700 px-3 py-4 text-center font-bold">
+                          {average.standardWeight == null ? "-" : average.standardWeight.toFixed(0)}
+                        </td>,
+                        <td key={`${index}-adg`} className="border border-gray-700 px-3 py-4 text-center font-bold">
+                          {average.actualAdg == null ? "-" : average.actualAdg.toFixed(2)}
+                        </td>,
+                        <td key={`${index}-std-adg`} className="border border-gray-700 px-3 py-4 text-center font-bold">
+                          {average.standardAdg == null ? "-" : average.standardAdg.toFixed(2)}
+                        </td>,
+                        <td key={`${index}-feed-bird`} className="border border-gray-700 px-3 py-4 text-center font-bold">
+                          {average.feedPerBirdG == null ? "-" : average.feedPerBirdG.toFixed(2)}
+                        </td>,
+                        <td key={`${index}-fcr`} className="border border-gray-700 px-3 py-4 text-center font-bold">
+                          {average.farmFcr == null ? "-" : average.farmFcr.toFixed(2)}
+                        </td>,
+                      ])}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
         {(activeTab === "summary" ||
           activeTab === "chart" ||
-          activeTab === "weekly") &&
+          activeTab === "weekly" ||
+          activeTab === "weight") &&
           !viewingBatch && (
           <div className="text-center bg-white p-12 rounded-lg shadow-sm">
             <svg
