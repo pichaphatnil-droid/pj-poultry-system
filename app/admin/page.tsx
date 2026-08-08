@@ -40,14 +40,51 @@ interface BatchHouseCount {
   batch_id: string;
   house_number: number;
   initial_count: number;
+  arrival_date: string | null;
+  capture_date: string | null;
+  chicken_sex: ChickenSex | null;
+  breed: string | null;
+  initial_weight: number | null;
 }
 
 type HouseChartMetric = "dead" | "culled" | "total";
+type ChickenSex = "male" | "female" | "mix";
+
+interface HouseDetailInput {
+  arrivalDate: string;
+  captureDate: string;
+  chickenSex: ChickenSex | "";
+  breed: string;
+  initialWeight: string;
+}
 
 const HOUSE_NUMBERS = [1, 2, 3, 4, 5, 6, 7] as const;
+const WEEKLY_TARGET_LOSS = [0.6, 0.4, 0.3, 0.3, 0.4, 0.5] as const;
+const WEIGHT_STANDARDS: Record<
+  ChickenSex,
+  { label: string; weights: readonly number[] }
+> = {
+  male: { label: "ผู้ (Male)", weights: [203, 520, 1011, 1646, 2367, 3118] },
+  female: { label: "เมีย (Female)", weights: [204, 505, 945, 1488, 2084, 2684] },
+  mix: { label: "คละ (Mix)", weights: [204, 512, 978, 1567, 2226, 2901] },
+};
 
 const createEmptyHouseCountInputs = (): Record<number, string> =>
   Object.fromEntries(HOUSE_NUMBERS.map((house) => [house, ""]));
+
+const createEmptyHouseDetailInputs = (): Record<number, HouseDetailInput> =>
+  Object.fromEntries(
+    HOUSE_NUMBERS.map((house) => [
+      house,
+      {
+        arrivalDate: "",
+        captureDate: "",
+        chickenSex: "",
+        breed: "",
+        initialWeight: "",
+      },
+    ]),
+  );
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -58,7 +95,7 @@ export default function AdminDashboard() {
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<
-    "summary" | "chart" | "logs" | "users" | "batches"
+    "summary" | "chart" | "weekly" | "logs" | "users" | "batches"
   >("summary");
   const [users, setUsers] = useState<User[]>([]);
   const [showBatchForm, setShowBatchForm] = useState(false);
@@ -67,8 +104,14 @@ export default function AdminDashboard() {
   const [newBatchHouseCounts, setNewBatchHouseCounts] = useState<
     Record<number, string>
   >(createEmptyHouseCountInputs);
+  const [newBatchHouseDetails, setNewBatchHouseDetails] = useState<
+    Record<number, HouseDetailInput>
+  >(createEmptyHouseDetailInputs);
   const [houseInitialCounts, setHouseInitialCounts] = useState<
     Record<number, number>
+  >({});
+  const [housePerformanceData, setHousePerformanceData] = useState<
+    Record<number, BatchHouseCount>
   >({});
   const [editHouseCountsBatchId, setEditHouseCountsBatchId] = useState<
     string | null
@@ -76,6 +119,9 @@ export default function AdminDashboard() {
   const [editHouseCounts, setEditHouseCounts] = useState<Record<number, string>>(
     createEmptyHouseCountInputs,
   );
+  const [editHouseDetails, setEditHouseDetails] = useState<
+    Record<number, HouseDetailInput>
+  >(createEmptyHouseDetailInputs);
   const [savingHouseCounts, setSavingHouseCounts] = useState(false);
   const [scheduleCloseBatchId, setScheduleCloseBatchId] = useState<string | null>(null);
   const [scheduledEndDate, setScheduledEndDate] = useState("");
@@ -154,23 +200,30 @@ export default function AdminDashboard() {
               .order("record_date", { ascending: true }),
             supabase
               .from("batch_house_counts")
-              .select("batch_id, house_number, initial_count")
+              .select(
+                "batch_id, house_number, initial_count, arrival_date, capture_date, chicken_sex, breed, initial_weight",
+              )
               .eq("batch_id", targetBatchId)
               .order("house_number", { ascending: true }),
           ]);
 
           const recordsData = recordsResult.data;
           setRecords(recordsData || []);
+          const houseCountRows = (houseCountsResult.data || []) as BatchHouseCount[];
           setHouseInitialCounts(
             Object.fromEntries(
-              ((houseCountsResult.data || []) as BatchHouseCount[]).map(
-                (item) => [item.house_number, item.initial_count],
-              ),
+              houseCountRows.map((item) => [item.house_number, item.initial_count]),
+            ),
+          );
+          setHousePerformanceData(
+            Object.fromEntries(
+              houseCountRows.map((item) => [item.house_number, item]),
             ),
           );
         } else {
           setRecords([]);
           setHouseInitialCounts({});
+          setHousePerformanceData({});
         }
       }
 
@@ -209,7 +262,9 @@ export default function AdminDashboard() {
           .order("record_date", { ascending: true }),
         supabase
           .from("batch_house_counts")
-          .select("batch_id, house_number, initial_count")
+          .select(
+            "batch_id, house_number, initial_count, arrival_date, capture_date, chicken_sex, breed, initial_weight",
+          )
           .eq("batch_id", batchId)
           .order("house_number", { ascending: true }),
       ]);
@@ -218,12 +273,15 @@ export default function AdminDashboard() {
       if (houseCountsResult.error) throw houseCountsResult.error;
 
       setRecords(recordsResult.data || []);
+      const houseCountRows = (houseCountsResult.data || []) as BatchHouseCount[];
       setHouseInitialCounts(
         Object.fromEntries(
-          ((houseCountsResult.data || []) as BatchHouseCount[]).map((item) => [
-            item.house_number,
-            item.initial_count,
-          ]),
+          houseCountRows.map((item) => [item.house_number, item.initial_count]),
+        ),
+      );
+      setHousePerformanceData(
+        Object.fromEntries(
+          houseCountRows.map((item) => [item.house_number, item]),
         ),
       );
     } catch (error) {
@@ -282,6 +340,36 @@ export default function AdminDashboard() {
       return;
     }
 
+    if (
+      HOUSE_NUMBERS.some((house) => {
+        const detail = newBatchHouseDetails[house];
+        return (
+          !detail.arrivalDate ||
+          !detail.chickenSex ||
+          !detail.breed.trim() ||
+          !(Number.parseFloat(detail.initialWeight) > 0)
+        );
+      })
+    ) {
+      alert(
+        "กรุณากรอกวันที่ไก่เข้า เพศ พันธุ์ และน้ำหนักแรกเข้าให้ครบทั้ง 7 เล้า",
+      );
+      return;
+    }
+
+    if (
+      HOUSE_NUMBERS.some((house) => {
+        const detail = newBatchHouseDetails[house];
+        return (
+          detail.captureDate !== "" &&
+          detail.captureDate < detail.arrivalDate
+        );
+      })
+    ) {
+      alert("วันที่จับไก่ต้องไม่อยู่ก่อนวันที่ไก่เข้า");
+      return;
+    }
+
     const totalInitialCount = HOUSE_NUMBERS.reduce(
       (sum, house) => sum + parsedHouseCounts[house],
       0,
@@ -328,6 +416,13 @@ export default function AdminDashboard() {
             batch_id: insertedBatch.id,
             house_number: house,
             initial_count: parsedHouseCounts[house],
+            arrival_date: newBatchHouseDetails[house].arrivalDate,
+            capture_date: newBatchHouseDetails[house].captureDate || null,
+            chicken_sex: newBatchHouseDetails[house].chickenSex,
+            breed: newBatchHouseDetails[house].breed.trim(),
+            initial_weight: Number.parseFloat(
+              newBatchHouseDetails[house].initialWeight,
+            ),
           })),
         );
 
@@ -338,6 +433,7 @@ export default function AdminDashboard() {
       setNewBatchName("");
       setNewBatchStartDate("");
       setNewBatchHouseCounts(createEmptyHouseCountInputs());
+      setNewBatchHouseDetails(createEmptyHouseDetailInputs());
       // สลับไปดูรุ่นใหม่ที่เพิ่งสร้างโดยอัตโนมัติ
       if (insertedBatch) {
         setSelectedBatchId(insertedBatch.id);
@@ -352,18 +448,29 @@ export default function AdminDashboard() {
     try {
       const { data, error } = await supabase
         .from("batch_house_counts")
-        .select("batch_id, house_number, initial_count")
+        .select(
+          "batch_id, house_number, initial_count, arrival_date, capture_date, chicken_sex, breed, initial_weight",
+        )
         .eq("batch_id", batchId)
         .order("house_number", { ascending: true });
 
       if (error) throw error;
 
       const counts = createEmptyHouseCountInputs();
+      const details = createEmptyHouseDetailInputs();
       ((data || []) as BatchHouseCount[]).forEach((item) => {
         counts[item.house_number] = item.initial_count.toString();
+        details[item.house_number] = {
+          arrivalDate: item.arrival_date || "",
+          captureDate: item.capture_date || "",
+          chickenSex: item.chicken_sex || "",
+          breed: item.breed || "",
+          initialWeight: item.initial_weight?.toString() || "",
+        };
       });
 
       setEditHouseCounts(counts);
+      setEditHouseDetails(details);
       setEditHouseCountsBatchId(batchId);
     } catch (error: any) {
       alert("ไม่สามารถโหลดจำนวนไก่เริ่มต้นได้: " + error.message);
@@ -385,6 +492,35 @@ export default function AdminDashboard() {
       return;
     }
 
+    if (
+      HOUSE_NUMBERS.some((house) => {
+        const detail = editHouseDetails[house];
+        return (
+          !detail.arrivalDate ||
+          !detail.chickenSex ||
+          !detail.breed.trim() ||
+          !(Number.parseFloat(detail.initialWeight) > 0)
+        );
+      })
+    ) {
+      alert(
+        "กรุณากรอกวันที่ไก่เข้า เพศ พันธุ์ และน้ำหนักแรกเข้าให้ครบทั้ง 7 เล้า",
+      );
+      return;
+    }
+
+    if (
+      HOUSE_NUMBERS.some((house) => {
+        const detail = editHouseDetails[house];
+        return (
+          detail.captureDate !== "" && detail.captureDate < detail.arrivalDate
+        );
+      })
+    ) {
+      alert("วันที่จับไก่ต้องไม่อยู่ก่อนวันที่ไก่เข้า");
+      return;
+    }
+
     const totalInitialCount = HOUSE_NUMBERS.reduce(
       (sum, house) => sum + parsedHouseCounts[house],
       0,
@@ -400,6 +536,13 @@ export default function AdminDashboard() {
             batch_id: editHouseCountsBatchId,
             house_number: house,
             initial_count: parsedHouseCounts[house],
+            arrival_date: editHouseDetails[house].arrivalDate,
+            capture_date: editHouseDetails[house].captureDate || null,
+            chicken_sex: editHouseDetails[house].chickenSex,
+            breed: editHouseDetails[house].breed.trim(),
+            initial_weight: Number.parseFloat(
+              editHouseDetails[house].initialWeight,
+            ),
             updated_at: now,
           })),
           { onConflict: "batch_id,house_number" },
@@ -416,11 +559,30 @@ export default function AdminDashboard() {
 
       if (selectedBatchId === editHouseCountsBatchId) {
         setHouseInitialCounts(parsedHouseCounts);
+        setHousePerformanceData(
+          Object.fromEntries(
+            HOUSE_NUMBERS.map((house) => [
+              house,
+              {
+                batch_id: editHouseCountsBatchId,
+                house_number: house,
+                initial_count: parsedHouseCounts[house],
+                arrival_date: editHouseDetails[house].arrivalDate,
+                capture_date: editHouseDetails[house].captureDate || null,
+                chicken_sex: editHouseDetails[house].chickenSex || null,
+                breed: editHouseDetails[house].breed.trim() || null,
+                initial_weight:
+                  Number.parseFloat(editHouseDetails[house].initialWeight) || null,
+              } satisfies BatchHouseCount,
+            ]),
+          ),
+        );
       }
 
       alert("บันทึกจำนวนไก่ลงเริ่มต้นเรียบร้อยแล้ว");
       setEditHouseCountsBatchId(null);
       setEditHouseCounts(createEmptyHouseCountInputs());
+      setEditHouseDetails(createEmptyHouseDetailInputs());
       loadData();
     } catch (error: any) {
       alert("เกิดข้อผิดพลาด: " + error.message);
@@ -698,6 +860,81 @@ export default function AdminDashboard() {
       });
   };
 
+  const prepareWeeklyHousePerformance = () => {
+    const todayDate = getTodayThailand();
+
+    return HOUSE_NUMBERS.map((house) => {
+      const profile = housePerformanceData[house];
+      const arrivalDate = profile?.arrival_date;
+      const initialCount = profile?.initial_count || 0;
+
+      const weeks = WEEKLY_TARGET_LOSS.map((target, index) => {
+        if (!arrivalDate || !initialCount) {
+          return {
+            week: index + 1,
+            target,
+            startDate: null,
+            endDate: null,
+            dead: 0,
+            culled: 0,
+            total: 0,
+            percentage: null,
+          };
+        }
+
+        const arrival = new Date(`${arrivalDate}T00:00:00`);
+        const weekStart = addDays(arrival, index * 7);
+        const weekEnd = addDays(weekStart, 6);
+        const startDate = format(weekStart, "yyyy-MM-dd");
+        const endDate = format(weekEnd, "yyyy-MM-dd");
+        const weekRecords = records.filter(
+          (record) =>
+            record.house_number === house &&
+            record.record_date >= startDate &&
+            record.record_date <= endDate,
+        );
+        const dead = weekRecords.reduce(
+          (sum, record) =>
+            sum + (record.morning_dead || 0) + (record.afternoon_dead || 0),
+          0,
+        );
+        const culled = weekRecords.reduce(
+          (sum, record) =>
+            sum +
+            (record.morning_culled || 0) +
+            (record.afternoon_culled || 0),
+          0,
+        );
+        const total = dead + culled;
+
+        return {
+          week: index + 1,
+          target,
+          startDate,
+          endDate,
+          dead,
+          culled,
+          total,
+          percentage:
+            startDate <= todayDate ? (total / initialCount) * 100 : null,
+        };
+      });
+
+      return {
+        house,
+        profile,
+        weeks,
+        captureAge:
+          profile?.arrival_date && profile?.capture_date
+            ? differenceInDays(
+                new Date(`${profile.capture_date}T00:00:00`),
+                new Date(`${profile.arrival_date}T00:00:00`),
+              )
+            : null,
+      };
+    });
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -739,6 +976,7 @@ export default function AdminDashboard() {
     (peak, day) => (!peak || day.total > peak.total ? day : peak),
     null,
   );
+  const weeklyHousePerformance = prepareWeeklyHousePerformance();
 
   // ตัวเลือกรุ่นสำหรับ dropdown เรียงรุ่นที่ใช้งานอยู่ขึ้นก่อน ตามด้วยรุ่นที่ปิดแล้วเรียงจากใหม่ไปเก่า
   const batchOptions = [...allBatches].sort((a, b) => {
@@ -762,6 +1000,145 @@ export default function AdminDashboard() {
       ))}
     </select>
   );
+
+  const HouseDetailCards = ({ mode }: { mode: "new" | "edit" }) => {
+    const counts = mode === "new" ? newBatchHouseCounts : editHouseCounts;
+    const details =
+      mode === "new" ? newBatchHouseDetails : editHouseDetails;
+    const setCounts =
+      mode === "new" ? setNewBatchHouseCounts : setEditHouseCounts;
+    const setDetails =
+      mode === "new" ? setNewBatchHouseDetails : setEditHouseDetails;
+
+    return (
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        {HOUSE_NUMBERS.map((house) => {
+          const detail = details[house];
+          const captureAge =
+            detail.arrivalDate && detail.captureDate
+              ? differenceInDays(
+                  new Date(`${detail.captureDate}T00:00:00`),
+                  new Date(`${detail.arrivalDate}T00:00:00`),
+                )
+              : null;
+
+          const updateDetail = (patch: Partial<HouseDetailInput>) =>
+            setDetails((current) => ({
+              ...current,
+              [house]: { ...current[house], ...patch },
+            }));
+
+          return (
+            <div
+              key={house}
+              className={`rounded-xl border bg-white p-4 ${
+                mode === "new" ? "border-blue-200" : "border-purple-200"
+              }`}
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <h5 className="text-lg font-bold text-gray-900">เล้า {house}</h5>
+                {captureAge != null && captureAge >= 0 && (
+                  <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
+                    อายุจับ {captureAge} วัน
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3">
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-600">
+                    จำนวนไก่ลง <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    inputMode="numeric"
+                    value={counts[house]}
+                    onChange={(e) =>
+                      setCounts((current) => ({
+                        ...current,
+                        [house]: e.target.value,
+                      }))
+                    }
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-right font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-600">
+                    วันที่ไก่เข้า <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    value={detail.arrivalDate}
+                    onChange={(e) => updateDetail({ arrivalDate: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-600">
+                    วันที่จับไก่
+                  </label>
+                  <input
+                    type="date"
+                    min={detail.arrivalDate || undefined}
+                    value={detail.captureDate}
+                    onChange={(e) => updateDetail({ captureDate: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-600">
+                    เพศ <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={detail.chickenSex}
+                    onChange={(e) =>
+                      updateDetail({ chickenSex: e.target.value as ChickenSex | "" })
+                    }
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                  >
+                    <option value="">เลือกเพศ</option>
+                    <option value="male">ผู้</option>
+                    <option value="female">เมีย</option>
+                    <option value="mix">คละ</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-600">
+                    พันธุ์ไก่ <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={detail.breed}
+                    onChange={(e) => updateDetail({ breed: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    placeholder="เช่น AA/A"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-600">
+                    น้ำหนักแรกเข้า (กรัม) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    inputMode="decimal"
+                    value={detail.initialWeight}
+                    onChange={(e) => updateDetail({ initialWeight: e.target.value })}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-right font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                    placeholder="เช่น 47.35"
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -806,6 +1183,16 @@ export default function AdminDashboard() {
               }`}
             >
               กราฟสรุป
+            </button>
+            <button
+              onClick={() => setActiveTab("weekly")}
+              className={`py-4 px-2 border-b-2 font-medium text-sm transition whitespace-nowrap ${
+                activeTab === "weekly"
+                  ? "border-purple-600 text-purple-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              ประสิทธิภาพรายสัปดาห์
             </button>
             <button
               onClick={() => setActiveTab("logs")}
@@ -1781,7 +2168,220 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {(activeTab === "summary" || activeTab === "chart") && !viewingBatch && (
+        {activeTab === "weekly" && viewingBatch && (
+          <div className="space-y-6">
+            <div className="rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-700 p-5 text-white shadow-sm md:p-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-purple-100">
+                    Weekly Performance
+                  </p>
+                  <h2 className="mt-1 text-2xl font-bold md:text-3xl">
+                    ประสิทธิภาพรายสัปดาห์ รุ่น {viewingBatch.batch_name}
+                  </h2>
+                  <p className="mt-2 text-sm text-purple-100">
+                    แต่ละสัปดาห์นับเป็นช่วงละ 7 วัน โดยเริ่มจากวันที่ไก่เข้าของแต่ละเล้า
+                  </p>
+                </div>
+                <BatchSelector />
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <div className="border-b border-gray-200 p-4 md:p-5">
+                <h3 className="text-xl font-bold text-gray-900">
+                  ข้อมูลประจำเล้า
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  วันที่จับไก่สามารถกลับมาใส่ภายหลังได้จากเมนูจัดการรุ่น
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-[1120px] w-full text-sm">
+                  <thead className="bg-gray-100 text-gray-700">
+                    <tr>
+                      <th className="px-4 py-3 text-center font-bold">เล้า</th>
+                      <th className="px-4 py-3 text-center font-bold">วันที่ไก่เข้า</th>
+                      <th className="px-4 py-3 text-right font-bold">จำนวนไก่ลง</th>
+                      <th className="px-4 py-3 text-center font-bold">เพศ</th>
+                      <th className="px-4 py-3 text-left font-bold">พันธุ์</th>
+                      <th className="px-4 py-3 text-right font-bold">น้ำหนักแรกเข้า</th>
+                      <th className="px-4 py-3 text-center font-bold">วันที่จับไก่</th>
+                      <th className="px-4 py-3 text-center font-bold">อายุจับ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {weeklyHousePerformance.map((item) => (
+                      <tr key={item.house} className="hover:bg-purple-50/40">
+                        <td className="px-4 py-3 text-center font-bold text-purple-700">
+                          {item.house}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {item.profile?.arrival_date
+                            ? format(
+                                new Date(`${item.profile.arrival_date}T00:00:00`),
+                                "dd/MM/yyyy",
+                              )
+                            : "-"}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          {item.profile?.initial_count?.toLocaleString() || "-"}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {item.profile?.chicken_sex
+                            ? WEIGHT_STANDARDS[item.profile.chicken_sex].label
+                            : "-"}
+                        </td>
+                        <td className="px-4 py-3">{item.profile?.breed || "-"}</td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          {item.profile?.initial_weight != null
+                            ? `${item.profile.initial_weight.toLocaleString()} กรัม`
+                            : "-"}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {item.profile?.capture_date
+                            ? format(
+                                new Date(`${item.profile.capture_date}T00:00:00`),
+                                "dd/MM/yyyy",
+                              )
+                            : "ยังไม่ระบุ"}
+                        </td>
+                        <td className="px-4 py-3 text-center font-bold">
+                          {item.captureAge == null ? "-" : `${item.captureAge} วัน`}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <div className="border-b border-gray-200 p-4 md:p-5">
+                <h3 className="text-xl font-bold text-gray-900">
+                  มาตรฐานน้ำหนัก AA รายสัปดาห์
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">หน่วย: กรัม/ตัว · 6 สัปดาห์</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-[760px] w-full text-sm">
+                  <thead className="bg-blue-50 text-blue-900">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-bold">เพศ</th>
+                      {WEEKLY_TARGET_LOSS.map((_, index) => (
+                        <th key={index} className="px-4 py-3 text-center font-bold">
+                          Wk{index + 1}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {(Object.keys(WEIGHT_STANDARDS) as ChickenSex[]).map((sex) => (
+                      <tr key={sex}>
+                        <td className="px-4 py-3 font-bold text-gray-800">
+                          {WEIGHT_STANDARDS[sex].label}
+                        </td>
+                        {WEIGHT_STANDARDS[sex].weights.map((weight, index) => (
+                          <td key={index} className="px-4 py-3 text-center font-semibold">
+                            {weight.toLocaleString()}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                    <tr className="bg-orange-50 text-orange-900">
+                      <td className="px-4 py-3 font-bold">เป้าหมายสูญเสียไม่เกิน</td>
+                      {WEEKLY_TARGET_LOSS.map((target, index) => (
+                        <td key={index} className="px-4 py-3 text-center font-bold">
+                          {target.toFixed(1)}%
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <div className="border-b border-gray-200 p-4 md:p-5">
+                <h3 className="text-xl font-bold text-gray-900">
+                  เปอร์เซ็นต์สูญเสียรายสัปดาห์แยกตามเล้า
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  คำนวณจาก (ตาย + คัดในสัปดาห์) ÷ จำนวนไก่ลงเริ่มต้น × 100
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-[1020px] w-full text-sm">
+                  <thead className="bg-gray-100 text-gray-700">
+                    <tr>
+                      <th className="px-4 py-3 text-center font-bold">เล้า</th>
+                      {WEEKLY_TARGET_LOSS.map((target, index) => (
+                        <th key={index} className="px-4 py-3 text-center font-bold">
+                          Wk{index + 1}
+                          <span className="mt-0.5 block text-[11px] font-medium text-gray-500">
+                            เป้า ≤ {target.toFixed(1)}%
+                          </span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {weeklyHousePerformance.map((item) => (
+                      <tr key={item.house}>
+                        <td className="px-4 py-4 text-center text-lg font-bold text-purple-700">
+                          {item.house}
+                        </td>
+                        {item.weeks.map((week) => {
+                          const passed =
+                            week.percentage != null &&
+                            week.percentage <= week.target;
+                          const failed =
+                            week.percentage != null &&
+                            week.percentage > week.target;
+
+                          return (
+                            <td key={week.week} className="px-3 py-3 text-center">
+                              <div
+                                className={`rounded-xl border p-3 ${
+                                  passed
+                                    ? "border-green-200 bg-green-50 text-green-800"
+                                    : failed
+                                      ? "border-red-200 bg-red-50 text-red-800"
+                                      : "border-gray-200 bg-gray-50 text-gray-400"
+                                }`}
+                                title={
+                                  week.startDate && week.endDate
+                                    ? `${week.startDate} ถึง ${week.endDate}`
+                                    : undefined
+                                }
+                              >
+                                <p className="text-lg font-bold">
+                                  {week.percentage == null
+                                    ? "-"
+                                    : `${week.percentage.toFixed(2)}%`}
+                                </p>
+                                <p className="mt-1 text-[11px]">
+                                  {week.percentage == null
+                                    ? "ยังไม่ถึงสัปดาห์"
+                                    : `${week.total.toLocaleString()} ตัว · ${passed ? "ผ่าน" : "เกินเป้า"}`}
+                                </p>
+                              </div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {(activeTab === "summary" ||
+          activeTab === "chart" ||
+          activeTab === "weekly") &&
+          !viewingBatch && (
           <div className="text-center bg-white p-12 rounded-lg shadow-sm">
             <svg
               className="w-16 h-16 text-gray-400 mx-auto mb-4"
@@ -1908,7 +2508,18 @@ export default function AdminDashboard() {
                     <input
                       type="date"
                       value={newBatchStartDate}
-                      onChange={(e) => setNewBatchStartDate(e.target.value)}
+                      onChange={(e) => {
+                        const date = e.target.value;
+                        setNewBatchStartDate(date);
+                        setNewBatchHouseDetails((current) =>
+                          Object.fromEntries(
+                            HOUSE_NUMBERS.map((house) => [
+                              house,
+                              { ...current[house], arrivalDate: date },
+                            ]),
+                          ),
+                        );
+                      }}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                     />
                   </div>
@@ -1932,30 +2543,7 @@ export default function AdminDashboard() {
                       ).toLocaleString()} ตัว
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-                    {HOUSE_NUMBERS.map((house) => (
-                      <div key={house}>
-                        <label className="mb-1 block text-xs font-bold text-gray-600">
-                          เล้า {house}
-                        </label>
-                        <input
-                          type="number"
-                          min="1"
-                          step="1"
-                          inputMode="numeric"
-                          value={newBatchHouseCounts[house]}
-                          onChange={(e) =>
-                            setNewBatchHouseCounts((current) => ({
-                              ...current,
-                              [house]: e.target.value,
-                            }))
-                          }
-                          className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-right font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
-                          placeholder="0"
-                        />
-                      </div>
-                    ))}
-                  </div>
+                  <HouseDetailCards mode="new" />
                 </div>
                 <div className="mt-4 flex justify-end space-x-3">
                   <button
@@ -1979,7 +2567,7 @@ export default function AdminDashboard() {
                 <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                   <div>
                     <h3 className="text-lg font-semibold text-gray-800">
-                      แก้ไขจำนวนไก่ลงเริ่มต้น
+                      แก้ไขข้อมูลประจำเล้า
                     </h3>
                     <p className="text-sm text-gray-500">
                       รุ่น {allBatches.find((batch) => batch.id === editHouseCountsBatchId)?.batch_name || "-"}
@@ -1995,30 +2583,7 @@ export default function AdminDashboard() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-                  {HOUSE_NUMBERS.map((house) => (
-                    <div key={house}>
-                      <label className="mb-1 block text-xs font-bold text-gray-600">
-                        เล้า {house}
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        inputMode="numeric"
-                        value={editHouseCounts[house]}
-                        onChange={(e) =>
-                          setEditHouseCounts((current) => ({
-                            ...current,
-                            [house]: e.target.value,
-                          }))
-                        }
-                        className="w-full rounded-lg border border-purple-200 px-3 py-2 text-right font-semibold outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
-                        placeholder="0"
-                      />
-                    </div>
-                  ))}
-                </div>
+                <HouseDetailCards mode="edit" />
 
                 <div className="mt-5 flex justify-end gap-3">
                   <button
@@ -2026,6 +2591,7 @@ export default function AdminDashboard() {
                     onClick={() => {
                       setEditHouseCountsBatchId(null);
                       setEditHouseCounts(createEmptyHouseCountInputs());
+                      setEditHouseDetails(createEmptyHouseDetailInputs());
                     }}
                     disabled={savingHouseCounts}
                     className="rounded-lg bg-gray-200 px-4 py-2 font-semibold text-gray-700 transition hover:bg-gray-300 disabled:opacity-50"
@@ -2038,7 +2604,7 @@ export default function AdminDashboard() {
                     disabled={savingHouseCounts}
                     className="rounded-lg bg-purple-600 px-4 py-2 font-semibold text-white transition hover:bg-purple-700 disabled:opacity-50"
                   >
-                    {savingHouseCounts ? "กำลังบันทึก..." : "บันทึกจำนวนไก่ลง"}
+                    {savingHouseCounts ? "กำลังบันทึก..." : "บันทึกข้อมูลประจำเล้า"}
                   </button>
                 </div>
               </div>
@@ -2162,7 +2728,7 @@ export default function AdminDashboard() {
                             onClick={() => handleOpenHouseCountsEditor(batch.id)}
                             className="text-purple-600 hover:text-purple-900 font-medium"
                           >
-                            แก้จำนวนไก่ลง
+                            แก้ข้อมูลประจำเล้า
                           </button>
                           {batch.is_active && (
                             <>
