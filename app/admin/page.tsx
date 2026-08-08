@@ -170,6 +170,7 @@ export default function AdminDashboard() {
   const [weeklyWeightInputs, setWeeklyWeightInputs] = useState<
     Record<number, string[]>
   >(createEmptyWeeklyWeightInputs);
+  const [editingWeeklyWeights, setEditingWeeklyWeights] = useState(false);
   const [savingWeeklyWeights, setSavingWeeklyWeights] = useState(false);
   const [scheduleCloseBatchId, setScheduleCloseBatchId] = useState<string | null>(null);
   const [scheduledEndDate, setScheduledEndDate] = useState("");
@@ -303,6 +304,7 @@ export default function AdminDashboard() {
     if (!batchId) return;
     setSelectedBatchId(batchId);
     setSelectedHouse(null);
+    setEditingWeeklyWeights(false);
     setRecordsLoading(true);
     try {
       const [recordsResult, houseCountsResult] = await Promise.all([
@@ -727,11 +729,19 @@ export default function AdminDashboard() {
       );
 
       alert("บันทึกน้ำหนักจริงรายสัปดาห์เรียบร้อยแล้ว");
+      setEditingWeeklyWeights(false);
     } catch (error: any) {
       alert("บันทึกน้ำหนักไม่สำเร็จ: " + error.message);
     } finally {
       setSavingWeeklyWeights(false);
     }
+  };
+
+  const handleCancelWeeklyWeightEdit = () => {
+    setWeeklyWeightInputs(
+      createWeeklyWeightInputs(Object.values(housePerformanceData)),
+    );
+    setEditingWeeklyWeights(false);
   };
 
   const handleCloseBatch = async (batchId: string) => {
@@ -2648,17 +2658,44 @@ export default function AdminDashboard() {
                     น้ำหนักจริงรายสัปดาห์เทียบมาตรฐาน
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    กรอกเป็นกรัม/ตัว รองรับทศนิยม · ค่าบวกหมายถึงสูงกว่ามาตรฐาน
+                    กด ✏️ เมื่อต้องการแก้ไข · ค่าบวกหมายถึงสูงกว่ามาตรฐาน
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleSaveWeeklyWeights}
-                  disabled={savingWeeklyWeights}
-                  className="rounded-xl bg-purple-600 px-5 py-3 font-bold text-white transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
+                <div
+                  className="flex flex-wrap gap-2"
+                  data-html2canvas-ignore="true"
                 >
-                  {savingWeeklyWeights ? "กำลังบันทึก..." : "บันทึกน้ำหนักรายสัปดาห์"}
-                </button>
+                  {editingWeeklyWeights ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleCancelWeeklyWeightEdit}
+                        disabled={savingWeeklyWeights}
+                        className="rounded-xl border border-gray-300 bg-white px-5 py-3 font-bold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        ยกเลิก
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveWeeklyWeights}
+                        disabled={savingWeeklyWeights}
+                        className="rounded-xl bg-purple-600 px-5 py-3 font-bold text-white transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {savingWeeklyWeights
+                          ? "กำลังบันทึก..."
+                          : "บันทึกน้ำหนักรายสัปดาห์"}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setEditingWeeklyWeights(true)}
+                      className="rounded-xl bg-purple-600 px-5 py-3 font-bold text-white transition hover:bg-purple-700"
+                    >
+                      ✏️ แก้ไขน้ำหนัก
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="overflow-x-auto" data-weekly-export-expand>
                 <table className="min-w-[1220px] w-full text-sm">
@@ -2701,25 +2738,36 @@ export default function AdminDashboard() {
 
                           return (
                             <td key={index} className="px-3 py-3 text-center">
-                              <input
-                                type="number"
-                                min="0.01"
-                                step="0.01"
-                                inputMode="decimal"
-                                value={rawValue}
-                                onChange={(event) => {
-                                  const nextValue = event.target.value;
-                                  setWeeklyWeightInputs((current) => ({
-                                    ...current,
-                                    [item.house]: current[item.house].map(
-                                      (value, weightIndex) =>
-                                        weightIndex === index ? nextValue : value,
-                                    ),
-                                  }));
-                                }}
-                                className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-right font-semibold outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
-                                placeholder="กรัม"
-                              />
+                              {editingWeeklyWeights &&
+                              !exportingWeeklyPerformance ? (
+                                <input
+                                  type="number"
+                                  min="0.01"
+                                  step="0.01"
+                                  inputMode="decimal"
+                                  value={rawValue}
+                                  onChange={(event) => {
+                                    const nextValue = event.target.value;
+                                    setWeeklyWeightInputs((current) => ({
+                                      ...current,
+                                      [item.house]: current[item.house].map(
+                                        (value, weightIndex) =>
+                                          weightIndex === index
+                                            ? nextValue
+                                            : value,
+                                      ),
+                                    }));
+                                  }}
+                                  className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-right font-semibold outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                                  placeholder="กรัม"
+                                />
+                              ) : (
+                                <div className="flex h-10 items-center justify-center text-base font-bold text-gray-900">
+                                  {Number.isFinite(actualWeight)
+                                    ? actualWeight.toFixed(2)
+                                    : "-"}
+                                </div>
+                              )}
                               <p className="mt-1 text-[10px] text-gray-500">
                                 {standardWeight == null
                                   ? "ยังไม่ระบุเพศ"
