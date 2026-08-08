@@ -193,7 +193,7 @@ const createEmptyWeightCalculatorInput = (
 ): WeightCalculatorInput => ({
   sampleDate: getTodayThailand(),
   birdsPerWeighing: "50",
-  basketWeightKg: "1",
+  basketWeightKg: "0",
   deductionPerBirdG: "10",
   feedKg: String(DEFAULT_WEEKLY_FEED_KG[house] || 0),
   measurements: Object.fromEntries(
@@ -210,7 +210,7 @@ const createWeightCalculatorInput = (
   return {
     sampleDate: session.sample_date || getTodayThailand(),
     birdsPerWeighing: String(session.birds_per_weighing || 50),
-    basketWeightKg: String(session.basket_weight_kg ?? 1),
+    basketWeightKg: String(session.basket_weight_kg ?? 0),
     deductionPerBirdG: String(session.deduction_per_bird_g ?? 10),
     feedKg: String(session.feed_kg ?? DEFAULT_WEEKLY_FEED_KG[house] ?? 0),
     measurements: Object.fromEntries(
