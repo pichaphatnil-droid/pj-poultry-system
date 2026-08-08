@@ -45,6 +45,12 @@ interface BatchHouseCount {
   chicken_sex: ChickenSex | null;
   breed: string | null;
   initial_weight: number | null;
+  weekly_weight_1: number | null;
+  weekly_weight_2: number | null;
+  weekly_weight_3: number | null;
+  weekly_weight_4: number | null;
+  weekly_weight_5: number | null;
+  weekly_weight_6: number | null;
 }
 
 type HouseChartMetric = "dead" | "culled" | "total";
@@ -60,6 +66,25 @@ interface HouseDetailInput {
 
 const HOUSE_NUMBERS = [1, 2, 3, 4, 5, 6, 7] as const;
 const WEEKLY_TARGET_LOSS = [0.6, 0.4, 0.3, 0.3, 0.4, 0.5] as const;
+const WEEKLY_WEIGHT_FIELDS = [
+  "weekly_weight_1",
+  "weekly_weight_2",
+  "weekly_weight_3",
+  "weekly_weight_4",
+  "weekly_weight_5",
+  "weekly_weight_6",
+] as const;
+const HOUSE_AREAS: Record<number, number> = {
+  1: 3000,
+  2: 3000,
+  3: 3000,
+  4: 3000,
+  5: 3000,
+  6: 3000,
+  7: 2500,
+};
+const BATCH_HOUSE_SELECT =
+  "batch_id, house_number, initial_count, arrival_date, capture_date, chicken_sex, breed, initial_weight, weekly_weight_1, weekly_weight_2, weekly_weight_3, weekly_weight_4, weekly_weight_5, weekly_weight_6";
 const WEIGHT_STANDARDS: Record<
   ChickenSex,
   { label: string; weights: readonly number[] }
@@ -85,6 +110,25 @@ const createEmptyHouseDetailInputs = (): Record<number, HouseDetailInput> =>
       },
     ]),
   );
+
+const createEmptyWeeklyWeightInputs = (): Record<number, string[]> =>
+  Object.fromEntries(
+    HOUSE_NUMBERS.map((house) => [house, WEEKLY_WEIGHT_FIELDS.map(() => "")]),
+  );
+
+const createWeeklyWeightInputs = (
+  rows: BatchHouseCount[],
+): Record<number, string[]> => {
+  const inputs = createEmptyWeeklyWeightInputs();
+
+  rows.forEach((row) => {
+    inputs[row.house_number] = WEEKLY_WEIGHT_FIELDS.map((field) =>
+      row[field] == null ? "" : String(row[field]),
+    );
+  });
+
+  return inputs;
+};
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -123,6 +167,10 @@ export default function AdminDashboard() {
     Record<number, HouseDetailInput>
   >(createEmptyHouseDetailInputs);
   const [savingHouseCounts, setSavingHouseCounts] = useState(false);
+  const [weeklyWeightInputs, setWeeklyWeightInputs] = useState<
+    Record<number, string[]>
+  >(createEmptyWeeklyWeightInputs);
+  const [savingWeeklyWeights, setSavingWeeklyWeights] = useState(false);
   const [scheduleCloseBatchId, setScheduleCloseBatchId] = useState<string | null>(null);
   const [scheduledEndDate, setScheduledEndDate] = useState("");
   const [legacyTableZoom, setLegacyTableZoom] = useState(1);
@@ -200,9 +248,7 @@ export default function AdminDashboard() {
               .order("record_date", { ascending: true }),
             supabase
               .from("batch_house_counts")
-              .select(
-                "batch_id, house_number, initial_count, arrival_date, capture_date, chicken_sex, breed, initial_weight",
-              )
+              .select(BATCH_HOUSE_SELECT)
               .eq("batch_id", targetBatchId)
               .order("house_number", { ascending: true }),
           ]);
@@ -220,10 +266,12 @@ export default function AdminDashboard() {
               houseCountRows.map((item) => [item.house_number, item]),
             ),
           );
+          setWeeklyWeightInputs(createWeeklyWeightInputs(houseCountRows));
         } else {
           setRecords([]);
           setHouseInitialCounts({});
           setHousePerformanceData({});
+          setWeeklyWeightInputs(createEmptyWeeklyWeightInputs());
         }
       }
 
@@ -262,9 +310,7 @@ export default function AdminDashboard() {
           .order("record_date", { ascending: true }),
         supabase
           .from("batch_house_counts")
-          .select(
-            "batch_id, house_number, initial_count, arrival_date, capture_date, chicken_sex, breed, initial_weight",
-          )
+          .select(BATCH_HOUSE_SELECT)
           .eq("batch_id", batchId)
           .order("house_number", { ascending: true }),
       ]);
@@ -284,6 +330,7 @@ export default function AdminDashboard() {
           houseCountRows.map((item) => [item.house_number, item]),
         ),
       );
+      setWeeklyWeightInputs(createWeeklyWeightInputs(houseCountRows));
     } catch (error) {
       console.error("Error loading records for selected batch:", error);
     } finally {
@@ -448,9 +495,7 @@ export default function AdminDashboard() {
     try {
       const { data, error } = await supabase
         .from("batch_house_counts")
-        .select(
-          "batch_id, house_number, initial_count, arrival_date, capture_date, chicken_sex, breed, initial_weight",
-        )
+        .select(BATCH_HOUSE_SELECT)
         .eq("batch_id", batchId)
         .order("house_number", { ascending: true });
 
@@ -573,6 +618,18 @@ export default function AdminDashboard() {
                 breed: editHouseDetails[house].breed.trim() || null,
                 initial_weight:
                   Number.parseFloat(editHouseDetails[house].initialWeight) || null,
+                weekly_weight_1:
+                  housePerformanceData[house]?.weekly_weight_1 ?? null,
+                weekly_weight_2:
+                  housePerformanceData[house]?.weekly_weight_2 ?? null,
+                weekly_weight_3:
+                  housePerformanceData[house]?.weekly_weight_3 ?? null,
+                weekly_weight_4:
+                  housePerformanceData[house]?.weekly_weight_4 ?? null,
+                weekly_weight_5:
+                  housePerformanceData[house]?.weekly_weight_5 ?? null,
+                weekly_weight_6:
+                  housePerformanceData[house]?.weekly_weight_6 ?? null,
               } satisfies BatchHouseCount,
             ]),
           ),
@@ -588,6 +645,89 @@ export default function AdminDashboard() {
       alert("เกิดข้อผิดพลาด: " + error.message);
     } finally {
       setSavingHouseCounts(false);
+    }
+  };
+
+  const handleSaveWeeklyWeights = async () => {
+    if (!viewingBatch) return;
+
+    const parsedWeights = Object.fromEntries(
+      HOUSE_NUMBERS.map((house) => [
+        house,
+        WEEKLY_WEIGHT_FIELDS.map((_, index) => {
+          const value = weeklyWeightInputs[house]?.[index]?.trim() || "";
+          return value === "" ? null : Number.parseFloat(value);
+        }),
+      ]),
+    ) as Record<number, Array<number | null>>;
+
+    const hasInvalidWeight = HOUSE_NUMBERS.some((house) =>
+      parsedWeights[house].some(
+        (weight) => weight != null && (!Number.isFinite(weight) || weight <= 0),
+      ),
+    );
+
+    if (hasInvalidWeight) {
+      alert("น้ำหนักรายสัปดาห์ต้องเป็นตัวเลขมากกว่า 0 หรือเว้นว่างไว้");
+      return;
+    }
+
+    if (HOUSE_NUMBERS.some((house) => !housePerformanceData[house])) {
+      alert("กรุณาบันทึกข้อมูลประจำเล้าให้ครบก่อนกรอกน้ำหนักรายสัปดาห์");
+      return;
+    }
+
+    setSavingWeeklyWeights(true);
+    try {
+      const now = new Date().toISOString();
+      const results = await Promise.all(
+        HOUSE_NUMBERS.map((house) => {
+          const weights = parsedWeights[house];
+          return supabase
+            .from("batch_house_counts")
+            .update({
+              weekly_weight_1: weights[0],
+              weekly_weight_2: weights[1],
+              weekly_weight_3: weights[2],
+              weekly_weight_4: weights[3],
+              weekly_weight_5: weights[4],
+              weekly_weight_6: weights[5],
+              updated_at: now,
+            })
+            .eq("batch_id", viewingBatch.id)
+            .eq("house_number", house);
+        }),
+      );
+
+      const failedResult = results.find((result) => result.error);
+      if (failedResult?.error) throw failedResult.error;
+
+      setHousePerformanceData((current) =>
+        Object.fromEntries(
+          HOUSE_NUMBERS.map((house) => {
+            const weights = parsedWeights[house];
+            const profile = current[house]!;
+            return [
+              house,
+              {
+                ...profile,
+                weekly_weight_1: weights[0],
+                weekly_weight_2: weights[1],
+                weekly_weight_3: weights[2],
+                weekly_weight_4: weights[3],
+                weekly_weight_5: weights[4],
+                weekly_weight_6: weights[5],
+              } satisfies BatchHouseCount,
+            ];
+          }),
+        ),
+      );
+
+      alert("บันทึกน้ำหนักจริงรายสัปดาห์เรียบร้อยแล้ว");
+    } catch (error: any) {
+      alert("บันทึกน้ำหนักไม่สำเร็จ: " + error.message);
+    } finally {
+      setSavingWeeklyWeights(false);
     }
   };
 
@@ -862,11 +1002,20 @@ export default function AdminDashboard() {
 
   const prepareWeeklyHousePerformance = () => {
     const todayDate = getTodayThailand();
+    const cumulativeHouseTotals = calculateHouseTotals(calculateDailySummary());
 
     return HOUSE_NUMBERS.map((house) => {
       const profile = housePerformanceData[house];
       const arrivalDate = profile?.arrival_date;
       const initialCount = profile?.initial_count || 0;
+      const cumulativeTotal = cumulativeHouseTotals[house]?.total || 0;
+      const cumulativeLossPercentage = initialCount
+        ? (cumulativeTotal / initialCount) * 100
+        : null;
+      const areaSquareMeters = HOUSE_AREAS[house];
+      const weeklyWeights = WEEKLY_WEIGHT_FIELDS.map(
+        (field) => profile?.[field] ?? null,
+      );
 
       const weeks = WEEKLY_TARGET_LOSS.map((target, index) => {
         if (!arrivalDate || !initialCount) {
@@ -928,6 +1077,16 @@ export default function AdminDashboard() {
         house,
         profile,
         weeks,
+        weeklyWeights,
+        areaSquareMeters,
+        density: initialCount ? initialCount / areaSquareMeters : null,
+        cumulativeTotal,
+        cumulativeLossPercentage,
+        liveability:
+          cumulativeLossPercentage == null
+            ? null
+            : Math.max(0, 100 - cumulativeLossPercentage),
+        remainingChickens: Math.max(0, initialCount - cumulativeTotal),
         captureAge:
           profile?.arrival_date && profile?.capture_date
             ? differenceInDays(
@@ -981,6 +1140,47 @@ export default function AdminDashboard() {
     null,
   );
   const weeklyHousePerformance = prepareWeeklyHousePerformance();
+  const totalHouseArea = HOUSE_NUMBERS.reduce(
+    (sum, house) => sum + HOUSE_AREAS[house],
+    0,
+  );
+  const performanceInitialTotal = weeklyHousePerformance.reduce(
+    (sum, item) => sum + (item.profile?.initial_count || 0),
+    0,
+  );
+  const performanceLossTotal = weeklyHousePerformance.reduce(
+    (sum, item) => sum + item.cumulativeTotal,
+    0,
+  );
+  const overallLossPercentage = performanceInitialTotal
+    ? (performanceLossTotal / performanceInitialTotal) * 100
+    : null;
+  const overallLiveability =
+    overallLossPercentage == null ? null : Math.max(0, 100 - overallLossPercentage);
+  const overallDensity = performanceInitialTotal
+    ? performanceInitialTotal / totalHouseArea
+    : null;
+  const weightedWeeklyAverageWeights = WEEKLY_WEIGHT_FIELDS.map((_, index) => {
+    const housesWithWeight = weeklyHousePerformance.filter(
+      (item) =>
+        item.weeklyWeights[index] != null && (item.profile?.initial_count || 0) > 0,
+    );
+    const weightedCount = housesWithWeight.reduce(
+      (sum, item) => sum + (item.profile?.initial_count || 0),
+      0,
+    );
+
+    if (!weightedCount) return null;
+
+    return (
+      housesWithWeight.reduce(
+        (sum, item) =>
+          sum +
+          (item.weeklyWeights[index] || 0) * (item.profile?.initial_count || 0),
+        0,
+      ) / weightedCount
+    );
+  });
 
   // ตัวเลือกรุ่นสำหรับ dropdown เรียงรุ่นที่ใช้งานอยู่ขึ้นก่อน ตามด้วยรุ่นที่ปิดแล้วเรียงจากใหม่ไปเก่า
   const batchOptions = [...allBatches].sort((a, b) => {
@@ -2192,6 +2392,48 @@ export default function AdminDashboard() {
               </div>
             </div>
 
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5 shadow-sm">
+                <p className="text-sm font-semibold text-blue-600">จำนวนไก่ลงรวม</p>
+                <p className="mt-2 text-3xl font-bold text-blue-900">
+                  {performanceInitialTotal.toLocaleString()}
+                  <span className="ml-1 text-base font-semibold">ตัว</span>
+                </p>
+              </div>
+              <div className="rounded-2xl border border-cyan-100 bg-cyan-50 p-5 shadow-sm">
+                <p className="text-sm font-semibold text-cyan-700">ความหนาแน่นรวม</p>
+                <p className="mt-2 text-3xl font-bold text-cyan-900">
+                  {overallDensity == null ? "-" : overallDensity.toFixed(2)}
+                  <span className="ml-1 text-base font-semibold">ตัว/ตร.ม.</span>
+                </p>
+                <p className="mt-1 text-xs text-cyan-600">
+                  พื้นที่รวม {totalHouseArea.toLocaleString()} ตร.ม.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-orange-100 bg-orange-50 p-5 shadow-sm">
+                <p className="text-sm font-semibold text-orange-600">สูญเสียสะสมรวม</p>
+                <p className="mt-2 text-3xl font-bold text-orange-900">
+                  {overallLossPercentage == null
+                    ? "-"
+                    : `${overallLossPercentage.toFixed(2)}%`}
+                </p>
+                <p className="mt-1 text-xs text-orange-600">
+                  {performanceLossTotal.toLocaleString()} ตัว
+                </p>
+              </div>
+              <div className="rounded-2xl border border-green-100 bg-green-50 p-5 shadow-sm">
+                <p className="text-sm font-semibold text-green-600">Liveability รวม</p>
+                <p className="mt-2 text-3xl font-bold text-green-900">
+                  {overallLiveability == null
+                    ? "-"
+                    : `${overallLiveability.toFixed(2)}%`}
+                </p>
+                <p className="mt-1 text-xs text-green-600">
+                  เหลือประมาณ {(performanceInitialTotal - performanceLossTotal).toLocaleString()} ตัว
+                </p>
+              </div>
+            </div>
+
             <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
               <div className="border-b border-gray-200 p-4 md:p-5">
                 <h3 className="text-xl font-bold text-gray-900">
@@ -2202,12 +2444,14 @@ export default function AdminDashboard() {
                 </p>
               </div>
               <div className="overflow-x-auto">
-                <table className="min-w-[1120px] w-full text-sm">
+                <table className="min-w-[1360px] w-full text-sm">
                   <thead className="bg-gray-100 text-gray-700">
                     <tr>
                       <th className="px-4 py-3 text-center font-bold">เล้า</th>
                       <th className="px-4 py-3 text-center font-bold">วันที่ไก่เข้า</th>
                       <th className="px-4 py-3 text-right font-bold">จำนวนไก่ลง</th>
+                      <th className="px-4 py-3 text-right font-bold">พื้นที่เล้า</th>
+                      <th className="px-4 py-3 text-right font-bold">ความหนาแน่น</th>
                       <th className="px-4 py-3 text-center font-bold">เพศ</th>
                       <th className="px-4 py-3 text-left font-bold">พันธุ์</th>
                       <th className="px-4 py-3 text-right font-bold">น้ำหนักแรกเข้า</th>
@@ -2231,6 +2475,14 @@ export default function AdminDashboard() {
                         </td>
                         <td className="px-4 py-3 text-right font-semibold">
                           {item.profile?.initial_count?.toLocaleString() || "-"}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {item.areaSquareMeters.toLocaleString()} ตร.ม.
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-cyan-700">
+                          {item.density == null
+                            ? "-"
+                            : `${item.density.toFixed(2)} ตัว/ตร.ม.`}
                         </td>
                         <td className="px-4 py-3 text-center">
                           {item.profile?.chicken_sex
@@ -2298,6 +2550,124 @@ export default function AdminDashboard() {
                       {WEEKLY_TARGET_LOSS.map((target, index) => (
                         <td key={index} className="px-4 py-3 text-center font-bold">
                           {target.toFixed(1)}%
+                        </td>
+                      ))}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <div className="flex flex-col gap-4 border-b border-gray-200 p-4 md:flex-row md:items-center md:justify-between md:p-5">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    น้ำหนักจริงรายสัปดาห์เทียบมาตรฐาน
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    กรอกเป็นกรัม/ตัว รองรับทศนิยม · ค่าบวกหมายถึงสูงกว่ามาตรฐาน
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveWeeklyWeights}
+                  disabled={savingWeeklyWeights}
+                  className="rounded-xl bg-purple-600 px-5 py-3 font-bold text-white transition hover:bg-purple-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingWeeklyWeights ? "กำลังบันทึก..." : "บันทึกน้ำหนักรายสัปดาห์"}
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-[1220px] w-full text-sm">
+                  <thead className="bg-purple-50 text-purple-900">
+                    <tr>
+                      <th className="px-4 py-3 text-center font-bold">เล้า</th>
+                      <th className="px-4 py-3 text-center font-bold">เพศ</th>
+                      {WEEKLY_WEIGHT_FIELDS.map((_, index) => (
+                        <th key={index} className="px-4 py-3 text-center font-bold">
+                          Wk{index + 1}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {weeklyHousePerformance.map((item) => (
+                      <tr key={item.house} className="align-top hover:bg-purple-50/30">
+                        <td className="px-4 py-4 text-center text-lg font-bold text-purple-700">
+                          {item.house}
+                        </td>
+                        <td className="px-4 py-4 text-center text-xs font-semibold text-gray-600">
+                          {item.profile?.chicken_sex
+                            ? WEIGHT_STANDARDS[item.profile.chicken_sex].label
+                            : "-"}
+                        </td>
+                        {WEEKLY_WEIGHT_FIELDS.map((_, index) => {
+                          const rawValue = weeklyWeightInputs[item.house]?.[index] || "";
+                          const actualWeight = Number.parseFloat(rawValue);
+                          const standardWeight = item.profile?.chicken_sex
+                            ? WEIGHT_STANDARDS[item.profile.chicken_sex].weights[index]
+                            : null;
+                          const difference =
+                            Number.isFinite(actualWeight) && standardWeight != null
+                              ? actualWeight - standardWeight
+                              : null;
+                          const differencePercentage =
+                            difference != null && standardWeight
+                              ? (difference / standardWeight) * 100
+                              : null;
+
+                          return (
+                            <td key={index} className="px-3 py-3 text-center">
+                              <input
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                inputMode="decimal"
+                                value={rawValue}
+                                onChange={(event) => {
+                                  const nextValue = event.target.value;
+                                  setWeeklyWeightInputs((current) => ({
+                                    ...current,
+                                    [item.house]: current[item.house].map(
+                                      (value, weightIndex) =>
+                                        weightIndex === index ? nextValue : value,
+                                    ),
+                                  }));
+                                }}
+                                className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-right font-semibold outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                                placeholder={
+                                  standardWeight == null ? "กรัม" : String(standardWeight)
+                                }
+                              />
+                              <p
+                                className={`mt-1 min-h-8 text-[11px] font-semibold ${
+                                  difference == null
+                                    ? "text-gray-400"
+                                    : difference < 0
+                                      ? "text-red-600"
+                                      : difference > 0
+                                        ? "text-green-700"
+                                        : "text-blue-600"
+                                }`}
+                              >
+                                {difference == null
+                                  ? standardWeight == null
+                                    ? "ยังไม่ระบุเพศ"
+                                    : `มาตรฐาน ${standardWeight.toLocaleString()}`
+                                  : `${difference >= 0 ? "+" : ""}${difference.toFixed(2)} กรัม (${differencePercentage! >= 0 ? "+" : ""}${differencePercentage!.toFixed(2)}%)`}
+                              </p>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                    <tr className="bg-gray-900 text-white">
+                      <td colSpan={2} className="px-4 py-4 font-bold">
+                        ค่าเฉลี่ยรวมถ่วงน้ำหนักตามจำนวนไก่
+                      </td>
+                      {weightedWeeklyAverageWeights.map((weight, index) => (
+                        <td key={index} className="px-4 py-4 text-center font-bold">
+                          {weight == null ? "-" : `${weight.toFixed(2)} กรัม`}
                         </td>
                       ))}
                     </tr>
@@ -2376,6 +2746,95 @@ export default function AdminDashboard() {
                         })}
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+              <div className="border-b border-gray-200 p-4 md:p-5">
+                <h3 className="text-xl font-bold text-gray-900">
+                  สรุปประสิทธิภาพสะสมทั้งรุ่น
+                </h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Liveability = 100 − เปอร์เซ็นต์สูญเสียสะสม
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-[1040px] w-full text-sm">
+                  <thead className="bg-gray-100 text-gray-700">
+                    <tr>
+                      <th className="px-4 py-3 text-center font-bold">เล้า</th>
+                      <th className="px-4 py-3 text-right font-bold">พื้นที่</th>
+                      <th className="px-4 py-3 text-right font-bold">ไก่ลง</th>
+                      <th className="px-4 py-3 text-right font-bold">ความหนาแน่น</th>
+                      <th className="px-4 py-3 text-right font-bold">สูญเสียสะสม</th>
+                      <th className="px-4 py-3 text-right font-bold">%สูญเสีย</th>
+                      <th className="px-4 py-3 text-right font-bold">ไก่คงเหลือ</th>
+                      <th className="px-4 py-3 text-right font-bold">%Liveability</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {weeklyHousePerformance.map((item) => (
+                      <tr key={item.house} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-center text-lg font-bold text-purple-700">
+                          {item.house}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {item.areaSquareMeters.toLocaleString()} ตร.ม.
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          {item.profile?.initial_count?.toLocaleString() || "-"}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-cyan-700">
+                          {item.density == null ? "-" : item.density.toFixed(2)}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-orange-700">
+                          {item.cumulativeTotal.toLocaleString()} ตัว
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-orange-700">
+                          {item.cumulativeLossPercentage == null
+                            ? "-"
+                            : `${item.cumulativeLossPercentage.toFixed(2)}%`}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          {item.remainingChickens.toLocaleString()} ตัว
+                        </td>
+                        <td className="px-4 py-3 text-right font-bold text-green-700">
+                          {item.liveability == null
+                            ? "-"
+                            : `${item.liveability.toFixed(2)}%`}
+                        </td>
+                      </tr>
+                    ))}
+                    <tr className="bg-gray-900 text-white">
+                      <td className="px-4 py-4 text-center font-bold">รวม</td>
+                      <td className="px-4 py-4 text-right font-bold">
+                        {totalHouseArea.toLocaleString()} ตร.ม.
+                      </td>
+                      <td className="px-4 py-4 text-right font-bold">
+                        {performanceInitialTotal.toLocaleString()}
+                      </td>
+                      <td className="px-4 py-4 text-right font-bold">
+                        {overallDensity == null ? "-" : overallDensity.toFixed(2)}
+                      </td>
+                      <td className="px-4 py-4 text-right font-bold">
+                        {performanceLossTotal.toLocaleString()} ตัว
+                      </td>
+                      <td className="px-4 py-4 text-right font-bold">
+                        {overallLossPercentage == null
+                          ? "-"
+                          : `${overallLossPercentage.toFixed(2)}%`}
+                      </td>
+                      <td className="px-4 py-4 text-right font-bold">
+                        {Math.max(0, performanceInitialTotal - performanceLossTotal).toLocaleString()} ตัว
+                      </td>
+                      <td className="px-4 py-4 text-right font-bold text-green-300">
+                        {overallLiveability == null
+                          ? "-"
+                          : `${overallLiveability.toFixed(2)}%`}
+                      </td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
