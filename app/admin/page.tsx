@@ -2789,7 +2789,7 @@ export default function AdminDashboard() {
                               >
                                 {difference == null
                                   ? "-"
-                                  : `${difference >= 0 ? "+" : ""}${difference.toFixed(2)} กรัม${growthMultiple == null ? "" : ` · ${growthMultiple.toFixed(3)} เท่า`}`}
+                                  : `${difference >= 0 ? "+" : ""}${difference.toFixed(2)} กรัม${growthMultiple == null ? "" : ` · ${(Math.ceil(growthMultiple * 100) / 100).toFixed(2)} เท่า`}`}
                               </p>
                             </td>
                           );
