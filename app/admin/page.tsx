@@ -36,7 +36,18 @@ interface AdminBatch extends Batch {
   closed_at?: string | null;
 }
 
+interface BatchHouseCount {
+  batch_id: string;
+  house_number: number;
+  initial_count: number;
+}
+
 type HouseChartMetric = "dead" | "culled" | "total";
+
+const HOUSE_NUMBERS = [1, 2, 3, 4, 5, 6, 7] as const;
+
+const createEmptyHouseCountInputs = (): Record<number, string> =>
+  Object.fromEntries(HOUSE_NUMBERS.map((house) => [house, ""]));
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -53,7 +64,19 @@ export default function AdminDashboard() {
   const [showBatchForm, setShowBatchForm] = useState(false);
   const [newBatchName, setNewBatchName] = useState("");
   const [newBatchStartDate, setNewBatchStartDate] = useState("");
-  const [newBatchInitialCount, setNewBatchInitialCount] = useState("");
+  const [newBatchHouseCounts, setNewBatchHouseCounts] = useState<
+    Record<number, string>
+  >(createEmptyHouseCountInputs);
+  const [houseInitialCounts, setHouseInitialCounts] = useState<
+    Record<number, number>
+  >({});
+  const [editHouseCountsBatchId, setEditHouseCountsBatchId] = useState<
+    string | null
+  >(null);
+  const [editHouseCounts, setEditHouseCounts] = useState<Record<number, string>>(
+    createEmptyHouseCountInputs,
+  );
+  const [savingHouseCounts, setSavingHouseCounts] = useState(false);
   const [scheduleCloseBatchId, setScheduleCloseBatchId] = useState<string | null>(null);
   const [scheduledEndDate, setScheduledEndDate] = useState("");
   const [legacyTableZoom, setLegacyTableZoom] = useState(1);
@@ -123,14 +146,31 @@ export default function AdminDashboard() {
         }
 
         if (targetBatchId) {
-          const { data: recordsData } = await supabase
-            .from("daily_records")
-            .select("*")
-            .eq("batch_id", targetBatchId)
-            .order("record_date", { ascending: true });
+          const [recordsResult, houseCountsResult] = await Promise.all([
+            supabase
+              .from("daily_records")
+              .select("*")
+              .eq("batch_id", targetBatchId)
+              .order("record_date", { ascending: true }),
+            supabase
+              .from("batch_house_counts")
+              .select("batch_id, house_number, initial_count")
+              .eq("batch_id", targetBatchId)
+              .order("house_number", { ascending: true }),
+          ]);
+
+          const recordsData = recordsResult.data;
           setRecords(recordsData || []);
+          setHouseInitialCounts(
+            Object.fromEntries(
+              ((houseCountsResult.data || []) as BatchHouseCount[]).map(
+                (item) => [item.house_number, item.initial_count],
+              ),
+            ),
+          );
         } else {
           setRecords([]);
+          setHouseInitialCounts({});
         }
       }
 
@@ -161,14 +201,31 @@ export default function AdminDashboard() {
     setSelectedHouse(null);
     setRecordsLoading(true);
     try {
-      const { data: recordsData, error } = await supabase
-        .from("daily_records")
-        .select("*")
-        .eq("batch_id", batchId)
-        .order("record_date", { ascending: true });
+      const [recordsResult, houseCountsResult] = await Promise.all([
+        supabase
+          .from("daily_records")
+          .select("*")
+          .eq("batch_id", batchId)
+          .order("record_date", { ascending: true }),
+        supabase
+          .from("batch_house_counts")
+          .select("batch_id, house_number, initial_count")
+          .eq("batch_id", batchId)
+          .order("house_number", { ascending: true }),
+      ]);
 
-      if (error) throw error;
-      setRecords(recordsData || []);
+      if (recordsResult.error) throw recordsResult.error;
+      if (houseCountsResult.error) throw houseCountsResult.error;
+
+      setRecords(recordsResult.data || []);
+      setHouseInitialCounts(
+        Object.fromEntries(
+          ((houseCountsResult.data || []) as BatchHouseCount[]).map((item) => [
+            item.house_number,
+            item.initial_count,
+          ]),
+        ),
+      );
     } catch (error) {
       console.error("Error loading records for selected batch:", error);
     } finally {
@@ -213,6 +270,23 @@ export default function AdminDashboard() {
       return;
     }
 
+    const parsedHouseCounts = Object.fromEntries(
+      HOUSE_NUMBERS.map((house) => [
+        house,
+        Number.parseInt(newBatchHouseCounts[house], 10) || 0,
+      ]),
+    ) as Record<number, number>;
+
+    if (HOUSE_NUMBERS.some((house) => parsedHouseCounts[house] <= 0)) {
+      alert("กรุณากรอกจำนวนไก่ลงเริ่มต้นให้ครบทั้ง 7 เล้า");
+      return;
+    }
+
+    const totalInitialCount = HOUSE_NUMBERS.reduce(
+      (sum, house) => sum + parsedHouseCounts[house],
+      0,
+    );
+
     try {
       // ปิดรุ่นเก่าก่อน
       if (activeBatch) {
@@ -235,7 +309,7 @@ export default function AdminDashboard() {
         .insert({
           batch_name: newBatchName,
           start_date: newBatchStartDate,
-          initial_count: parseInt(newBatchInitialCount) || 0,
+          initial_count: totalInitialCount,
           is_active: true,
           scheduled_end_date: null,
           closed_at: null,
@@ -245,12 +319,25 @@ export default function AdminDashboard() {
         .single();
 
       if (error) throw error;
+      if (!insertedBatch) throw new Error("ไม่พบข้อมูลรุ่นที่เพิ่งสร้าง");
+
+      const { error: houseCountsError } = await supabase
+        .from("batch_house_counts")
+        .insert(
+          HOUSE_NUMBERS.map((house) => ({
+            batch_id: insertedBatch.id,
+            house_number: house,
+            initial_count: parsedHouseCounts[house],
+          })),
+        );
+
+      if (houseCountsError) throw houseCountsError;
 
       alert("สร้างรุ่นใหม่สำเร็จ");
       setShowBatchForm(false);
       setNewBatchName("");
       setNewBatchStartDate("");
-      setNewBatchInitialCount("");
+      setNewBatchHouseCounts(createEmptyHouseCountInputs());
       // สลับไปดูรุ่นใหม่ที่เพิ่งสร้างโดยอัตโนมัติ
       if (insertedBatch) {
         setSelectedBatchId(insertedBatch.id);
@@ -258,6 +345,87 @@ export default function AdminDashboard() {
       loadData();
     } catch (error: any) {
       alert("เกิดข้อผิดพลาด: " + error.message);
+    }
+  };
+
+  const handleOpenHouseCountsEditor = async (batchId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("batch_house_counts")
+        .select("batch_id, house_number, initial_count")
+        .eq("batch_id", batchId)
+        .order("house_number", { ascending: true });
+
+      if (error) throw error;
+
+      const counts = createEmptyHouseCountInputs();
+      ((data || []) as BatchHouseCount[]).forEach((item) => {
+        counts[item.house_number] = item.initial_count.toString();
+      });
+
+      setEditHouseCounts(counts);
+      setEditHouseCountsBatchId(batchId);
+    } catch (error: any) {
+      alert("ไม่สามารถโหลดจำนวนไก่เริ่มต้นได้: " + error.message);
+    }
+  };
+
+  const handleSaveHouseCounts = async () => {
+    if (!editHouseCountsBatchId) return;
+
+    const parsedHouseCounts = Object.fromEntries(
+      HOUSE_NUMBERS.map((house) => [
+        house,
+        Number.parseInt(editHouseCounts[house], 10) || 0,
+      ]),
+    ) as Record<number, number>;
+
+    if (HOUSE_NUMBERS.some((house) => parsedHouseCounts[house] <= 0)) {
+      alert("กรุณากรอกจำนวนไก่ลงเริ่มต้นให้ครบทั้ง 7 เล้า");
+      return;
+    }
+
+    const totalInitialCount = HOUSE_NUMBERS.reduce(
+      (sum, house) => sum + parsedHouseCounts[house],
+      0,
+    );
+
+    setSavingHouseCounts(true);
+    try {
+      const now = new Date().toISOString();
+      const { error: countsError } = await supabase
+        .from("batch_house_counts")
+        .upsert(
+          HOUSE_NUMBERS.map((house) => ({
+            batch_id: editHouseCountsBatchId,
+            house_number: house,
+            initial_count: parsedHouseCounts[house],
+            updated_at: now,
+          })),
+          { onConflict: "batch_id,house_number" },
+        );
+
+      if (countsError) throw countsError;
+
+      const { error: batchError } = await supabase
+        .from("batches")
+        .update({ initial_count: totalInitialCount })
+        .eq("id", editHouseCountsBatchId);
+
+      if (batchError) throw batchError;
+
+      if (selectedBatchId === editHouseCountsBatchId) {
+        setHouseInitialCounts(parsedHouseCounts);
+      }
+
+      alert("บันทึกจำนวนไก่ลงเริ่มต้นเรียบร้อยแล้ว");
+      setEditHouseCountsBatchId(null);
+      setEditHouseCounts(createEmptyHouseCountInputs());
+      loadData();
+    } catch (error: any) {
+      alert("เกิดข้อผิดพลาด: " + error.message);
+    } finally {
+      setSavingHouseCounts(false);
     }
   };
 
@@ -556,6 +724,13 @@ export default function AdminDashboard() {
     ? prepareSelectedHouseData(selectedHouse)
     : [];
   const selectedHouseTotal = selectedHouse ? houseTotals[selectedHouse] : null;
+  const selectedHouseInitialCount = selectedHouse
+    ? houseInitialCounts[selectedHouse] || 0
+    : 0;
+  const selectedHouseLossPercentage =
+    selectedHouseTotal && selectedHouseInitialCount
+      ? (selectedHouseTotal.total / selectedHouseInitialCount) * 100
+      : null;
   const selectedHouseAverageLoss = selectedHouseDailyData.length
     ? (selectedHouseDailyData.reduce((sum, day) => sum + day.total, 0) /
         selectedHouseDailyData.length).toFixed(1)
@@ -784,6 +959,10 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
                 {[1, 2, 3, 4, 5, 6, 7].map((house) => {
                   const total = houseTotals[house];
+                  const initialCount = houseInitialCounts[house] || 0;
+                  const lossPercentage = initialCount
+                    ? (total.total / initialCount) * 100
+                    : null;
                   const latestRecord = [...records]
                     .filter((r) => r.house_number === house)
                     .sort((a, b) =>
@@ -805,14 +984,21 @@ export default function AdminDashboard() {
                               เล้า {house}
                             </h4>
                             <p className="text-xs text-gray-500">
-                              ยอดสะสมทั้งรุ่น
+                              {initialCount
+                                ? `ไก่ลง ${initialCount.toLocaleString()} ตัว`
+                                : "ยังไม่กำหนดจำนวนไก่ลง"}
                             </p>
                           </div>
                         </div>
                         <div
-                          className={`px-3 py-1 rounded-full text-xs font-bold ${total.total > 0 ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}
+                          className="rounded-xl bg-purple-100 px-3 py-2 text-center text-purple-800"
                         >
-                          รวม {total.total}
+                          <p className="text-[10px] font-semibold">สูญเสีย</p>
+                          <p className="text-base font-bold">
+                            {lossPercentage === null
+                              ? "-"
+                              : `${lossPercentage.toFixed(2)}%`}
+                          </p>
                         </div>
                       </div>
 
@@ -908,7 +1094,16 @@ export default function AdminDashboard() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+                  <div className="rounded-2xl border border-gray-200 bg-white p-4">
+                    <p className="text-xs font-semibold text-gray-500">ไก่ลงเริ่มต้น</p>
+                    <p className="mt-1 text-2xl font-bold text-gray-900">
+                      {selectedHouseInitialCount
+                        ? selectedHouseInitialCount.toLocaleString()
+                        : "-"}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-400">ตัว</p>
+                  </div>
                   <div className="rounded-2xl border border-red-100 bg-white p-4">
                     <p className="text-xs font-semibold text-gray-500">ตายสะสม</p>
                     <p className="mt-1 text-2xl font-bold text-red-600">
@@ -929,6 +1124,15 @@ export default function AdminDashboard() {
                       {selectedHouseTotal.total.toLocaleString()}
                     </p>
                     <p className="mt-1 text-xs text-gray-400">ตาย + คัด</p>
+                  </div>
+                  <div className="rounded-2xl border border-purple-100 bg-white p-4">
+                    <p className="text-xs font-semibold text-gray-500">เปอร์เซ็นต์สูญเสีย</p>
+                    <p className="mt-1 text-2xl font-bold text-purple-700">
+                      {selectedHouseLossPercentage === null
+                        ? "-"
+                        : `${selectedHouseLossPercentage.toFixed(2)}%`}
+                    </p>
+                    <p className="mt-1 text-xs text-gray-400">เทียบกับไก่ลงเริ่มต้น</p>
                   </div>
                   <div className="rounded-2xl border border-blue-100 bg-white p-4">
                     <p className="text-xs font-semibold text-gray-500">เฉลี่ยต่อวัน</p>
@@ -1684,7 +1888,7 @@ export default function AdminDashboard() {
                 <h3 className="text-lg font-semibold text-gray-800 mb-4">
                   สร้างรุ่นใหม่
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       ชื่อรุ่น
@@ -1708,17 +1912,49 @@ export default function AdminDashboard() {
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      จำนวนเริ่มต้น
-                    </label>
-                    <input
-                      type="number"
-                      value={newBatchInitialCount}
-                      onChange={(e) => setNewBatchInitialCount(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                      placeholder="0"
-                    />
+                </div>
+                <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
+                  <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <h4 className="font-bold text-gray-900">
+                        จำนวนไก่ลงเริ่มต้นแยกตามเล้า
+                      </h4>
+                      <p className="text-sm text-gray-500">
+                        กรอกจากช่อง DOC/จำนวนไก่เข้าใน Weekly Report ของฟาร์ม
+                      </p>
+                    </div>
+                    <p className="text-sm font-bold text-blue-700">
+                      รวม {HOUSE_NUMBERS.reduce(
+                        (sum, house) =>
+                          sum +
+                          (Number.parseInt(newBatchHouseCounts[house], 10) || 0),
+                        0,
+                      ).toLocaleString()} ตัว
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+                    {HOUSE_NUMBERS.map((house) => (
+                      <div key={house}>
+                        <label className="mb-1 block text-xs font-bold text-gray-600">
+                          เล้า {house}
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          inputMode="numeric"
+                          value={newBatchHouseCounts[house]}
+                          onChange={(e) =>
+                            setNewBatchHouseCounts((current) => ({
+                              ...current,
+                              [house]: e.target.value,
+                            }))
+                          }
+                          className="w-full rounded-lg border border-blue-200 bg-white px-3 py-2 text-right font-semibold outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
+                          placeholder="0"
+                        />
+                      </div>
+                    ))}
                   </div>
                 </div>
                 <div className="mt-4 flex justify-end space-x-3">
@@ -1733,6 +1969,76 @@ export default function AdminDashboard() {
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"
                   >
                     สร้างรุ่น
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {editHouseCountsBatchId && (
+              <div className="rounded-lg border border-purple-200 bg-white p-6 shadow-sm">
+                <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800">
+                      แก้ไขจำนวนไก่ลงเริ่มต้น
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      รุ่น {allBatches.find((batch) => batch.id === editHouseCountsBatchId)?.batch_name || "-"}
+                    </p>
+                  </div>
+                  <p className="text-sm font-bold text-purple-700">
+                    รวม {HOUSE_NUMBERS.reduce(
+                      (sum, house) =>
+                        sum +
+                        (Number.parseInt(editHouseCounts[house], 10) || 0),
+                      0,
+                    ).toLocaleString()} ตัว
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+                  {HOUSE_NUMBERS.map((house) => (
+                    <div key={house}>
+                      <label className="mb-1 block text-xs font-bold text-gray-600">
+                        เล้า {house}
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        inputMode="numeric"
+                        value={editHouseCounts[house]}
+                        onChange={(e) =>
+                          setEditHouseCounts((current) => ({
+                            ...current,
+                            [house]: e.target.value,
+                          }))
+                        }
+                        className="w-full rounded-lg border border-purple-200 px-3 py-2 text-right font-semibold outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
+                        placeholder="0"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-5 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditHouseCountsBatchId(null);
+                      setEditHouseCounts(createEmptyHouseCountInputs());
+                    }}
+                    disabled={savingHouseCounts}
+                    className="rounded-lg bg-gray-200 px-4 py-2 font-semibold text-gray-700 transition hover:bg-gray-300 disabled:opacity-50"
+                  >
+                    ยกเลิก
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveHouseCounts}
+                    disabled={savingHouseCounts}
+                    className="rounded-lg bg-purple-600 px-4 py-2 font-semibold text-white transition hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    {savingHouseCounts ? "กำลังบันทึก..." : "บันทึกจำนวนไก่ลง"}
                   </button>
                 </div>
               </div>
@@ -1851,6 +2157,12 @@ export default function AdminDashboard() {
                             className="text-indigo-600 hover:text-indigo-900 font-medium"
                           >
                             ดูสรุป
+                          </button>
+                          <button
+                            onClick={() => handleOpenHouseCountsEditor(batch.id)}
+                            className="text-purple-600 hover:text-purple-900 font-medium"
+                          >
+                            แก้จำนวนไก่ลง
                           </button>
                           {batch.is_active && (
                             <>
