@@ -287,6 +287,8 @@ export default function AdminDashboard() {
   const weeklyPerformanceExportRef = useRef<HTMLDivElement | null>(null);
   const [exportingWeeklyPerformance, setExportingWeeklyPerformance] =
     useState(false);
+  const growthTableExportRef = useRef<HTMLDivElement | null>(null);
+  const [exportingGrowthTable, setExportingGrowthTable] = useState(false);
 
   // รุ่นที่กำลังดูอยู่ในแท็บ "ตารางสรุป" / "กราฟสรุป" (อาจเป็นรุ่นที่ปิดไปแล้วก็ได้)
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
@@ -1353,6 +1355,86 @@ export default function AdminDashboard() {
         item.style.overflowX = previousExpandableStyles[index].overflowX;
       });
       setExportingWeeklyPerformance(false);
+    }
+  };
+
+  const handleExportGrowthTableImage = async () => {
+    const element = growthTableExportRef.current;
+    if (!element) return;
+
+    setExportingGrowthTable(true);
+
+    const scrollContainer = element.querySelector<HTMLElement>(
+      "[data-growth-export-scroll]",
+    );
+    const previousElementStyles = {
+      width: element.style.width,
+      minWidth: element.style.minWidth,
+      maxWidth: element.style.maxWidth,
+      overflow: element.style.overflow,
+      backgroundColor: element.style.backgroundColor,
+    };
+    const previousScrollStyles = scrollContainer
+      ? {
+          overflow: scrollContainer.style.overflow,
+          overflowX: scrollContainer.style.overflowX,
+        }
+      : null;
+
+    // ตารางมี 6 สัปดาห์และ 38 คอลัมน์ จึงขยายเป็นความกว้างจริงก่อนจับภาพ
+    // เพื่อไม่ให้ html2canvas บีบสัดส่วนหรือตัดคอลัมน์ที่อยู่นอกหน้าจอ
+    element.style.width = "3300px";
+    element.style.minWidth = "3300px";
+    element.style.maxWidth = "none";
+    element.style.overflow = "visible";
+    element.style.backgroundColor = "#ffffff";
+    if (scrollContainer) {
+      scrollContainer.style.overflow = "visible";
+      scrollContainer.style.overflowX = "visible";
+    }
+
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const exportWidth = Math.ceil(element.scrollWidth);
+      const exportHeight = Math.ceil(element.scrollHeight);
+      const canvas = await html2canvas(element, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+        width: exportWidth,
+        height: exportHeight,
+        windowWidth: exportWidth,
+        windowHeight: exportHeight,
+        scrollX: 0,
+        scrollY: 0,
+      });
+
+      const safeBatchName = (viewingBatch?.batch_name || "batch").replace(
+        /[\\/:*?"<>|]/g,
+        "-",
+      );
+      const link = document.createElement("a");
+      link.download = `Growth-Performance-${safeBatchName}-${getTodayThailand()}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (error) {
+      console.error("Growth table export failed:", error);
+      alert(
+        "ไม่สามารถ Export ตารางเป็นภาพได้ กรุณาติดตั้งแพ็กเกจ html2canvas ด้วยคำสั่ง: npm install html2canvas",
+      );
+    } finally {
+      element.style.width = previousElementStyles.width;
+      element.style.minWidth = previousElementStyles.minWidth;
+      element.style.maxWidth = previousElementStyles.maxWidth;
+      element.style.overflow = previousElementStyles.overflow;
+      element.style.backgroundColor = previousElementStyles.backgroundColor;
+      if (scrollContainer && previousScrollStyles) {
+        scrollContainer.style.overflow = previousScrollStyles.overflow;
+        scrollContainer.style.overflowX = previousScrollStyles.overflowX;
+      }
+      setExportingGrowthTable(false);
     }
   };
 
@@ -3883,16 +3965,32 @@ export default function AdminDashboard() {
               </button>
             </div>
 
-            <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-              <div className="border-b border-gray-200 p-4 md:p-5">
-                <h3 className="text-xl font-bold text-gray-900">
-                  ตารางแสดงการเจริญเติบโต
-                </h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  ADG = (น้ำหนักสัปดาห์ปัจจุบัน − น้ำหนักสัปดาห์ก่อน) ÷ 7 · FCR ฟาร์ม = น้ำหนักเฉลี่ย ÷ อาหารต่อไก่
-                </p>
+            <div
+              ref={growthTableExportRef}
+              className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
+            >
+              <div className="flex flex-col gap-3 border-b border-gray-200 p-4 sm:flex-row sm:items-center sm:justify-between md:p-5">
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900">
+                    ตารางแสดงการเจริญเติบโต
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    ADG = (น้ำหนักสัปดาห์ปัจจุบัน − น้ำหนักสัปดาห์ก่อน) ÷ 7 · FCR ฟาร์ม = น้ำหนักเฉลี่ย ÷ อาหารต่อไก่
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleExportGrowthTableImage}
+                  disabled={exportingGrowthTable}
+                  data-html2canvas-ignore="true"
+                  className="shrink-0 rounded-xl bg-orange-500 px-5 py-3 font-bold text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {exportingGrowthTable
+                    ? "กำลัง Export..."
+                    : "Export ตารางเป็น PNG"}
+                </button>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" data-growth-export-scroll>
                 <table className="min-w-[3300px] w-full text-xs">
                   <thead>
                     <tr className="bg-orange-50 text-orange-950">
