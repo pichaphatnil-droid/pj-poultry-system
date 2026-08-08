@@ -176,6 +176,9 @@ export default function AdminDashboard() {
   const [legacyTableZoom, setLegacyTableZoom] = useState(1);
   const legacyTableExportRef = useRef<HTMLDivElement | null>(null);
   const [exportingLegacyTable, setExportingLegacyTable] = useState(false);
+  const weeklyPerformanceExportRef = useRef<HTMLDivElement | null>(null);
+  const [exportingWeeklyPerformance, setExportingWeeklyPerformance] =
+    useState(false);
 
   // รุ่นที่กำลังดูอยู่ในแท็บ "ตารางสรุป" / "กราฟสรุป" (อาจเป็นรุ่นที่ปิดไปแล้วก็ได้)
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
@@ -866,6 +869,80 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleExportWeeklyPerformanceImage = async () => {
+    const element = weeklyPerformanceExportRef.current;
+    if (!element) return;
+
+    setExportingWeeklyPerformance(true);
+
+    const previousElementStyles = {
+      width: element.style.width,
+      minWidth: element.style.minWidth,
+      maxWidth: element.style.maxWidth,
+      backgroundColor: element.style.backgroundColor,
+    };
+    const expandableElements = Array.from(
+      element.querySelectorAll<HTMLElement>("[data-weekly-export-expand]"),
+    );
+    const previousExpandableStyles = expandableElements.map((item) => ({
+      overflow: item.style.overflow,
+      overflowX: item.style.overflowX,
+    }));
+
+    // ใช้ความกว้างคงที่สำหรับภาพ เพื่อให้ตารางและการ์ดไม่ถูกบีบหรือยืดผิดสัดส่วน
+    element.style.width = "1440px";
+    element.style.minWidth = "1440px";
+    element.style.maxWidth = "none";
+    element.style.backgroundColor = "#f9fafb";
+    expandableElements.forEach((item) => {
+      item.style.overflow = "visible";
+      item.style.overflowX = "visible";
+    });
+
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const exportWidth = Math.ceil(element.scrollWidth);
+      const exportHeight = Math.ceil(element.scrollHeight);
+      const canvas = await html2canvas(element, {
+        backgroundColor: "#f9fafb",
+        scale: 2,
+        useCORS: true,
+        width: exportWidth,
+        height: exportHeight,
+        windowWidth: exportWidth,
+        windowHeight: exportHeight,
+        scrollX: 0,
+        scrollY: 0,
+      });
+
+      const safeBatchName = (viewingBatch?.batch_name || "batch").replace(
+        /[\\/:*?"<>|]/g,
+        "-",
+      );
+      const link = document.createElement("a");
+      link.download = `Weekly-Performance-${safeBatchName}-${getTodayThailand()}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (error) {
+      console.error("Weekly Performance export failed:", error);
+      alert(
+        "ไม่สามารถ Export เป็นภาพได้ กรุณาติดตั้งแพ็กเกจ html2canvas ด้วยคำสั่ง: npm install html2canvas",
+      );
+    } finally {
+      element.style.width = previousElementStyles.width;
+      element.style.minWidth = previousElementStyles.minWidth;
+      element.style.maxWidth = previousElementStyles.maxWidth;
+      element.style.backgroundColor = previousElementStyles.backgroundColor;
+      expandableElements.forEach((item, index) => {
+        item.style.overflow = previousExpandableStyles[index].overflow;
+        item.style.overflowX = previousExpandableStyles[index].overflowX;
+      });
+      setExportingWeeklyPerformance(false);
+    }
+  };
+
   // รุ่นที่กำลังแสดงผลอยู่ในแท็บตารางสรุป/กราฟสรุป (ค่าเริ่มต้นคือรุ่นที่ใช้งานอยู่ ถ้าไม่ได้เลือกรุ่นอื่น)
   const viewingBatch: AdminBatch | null =
     allBatches.find((b) => b.id === selectedBatchId) || activeBatch;
@@ -1160,25 +1237,18 @@ export default function AdminDashboard() {
   const overallDensity = performanceInitialTotal
     ? performanceInitialTotal / totalHouseArea
     : null;
-  const weightedWeeklyAverageWeights = WEEKLY_WEIGHT_FIELDS.map((_, index) => {
-    const housesWithWeight = weeklyHousePerformance.filter(
-      (item) =>
-        item.weeklyWeights[index] != null && (item.profile?.initial_count || 0) > 0,
-    );
-    const weightedCount = housesWithWeight.reduce(
-      (sum, item) => sum + (item.profile?.initial_count || 0),
-      0,
-    );
+  const weeklyAverageWeights = WEEKLY_WEIGHT_FIELDS.map((_, index) => {
+    const enteredWeights = weeklyHousePerformance
+      .map((item) => item.weeklyWeights[index])
+      .filter((weight): weight is number => weight != null)
+      .map(Number)
+      .filter(Number.isFinite);
 
-    if (!weightedCount) return null;
+    if (!enteredWeights.length) return null;
 
     return (
-      housesWithWeight.reduce(
-        (sum, item) =>
-          sum +
-          (item.weeklyWeights[index] || 0) * (item.profile?.initial_count || 0),
-        0,
-      ) / weightedCount
+      enteredWeights.reduce((sum, weight) => sum + weight, 0) /
+      enteredWeights.length
     );
   });
 
@@ -2373,7 +2443,7 @@ export default function AdminDashboard() {
         )}
 
         {activeTab === "weekly" && viewingBatch && (
-          <div className="space-y-6">
+          <div ref={weeklyPerformanceExportRef} className="space-y-6">
             <div className="rounded-2xl bg-gradient-to-br from-purple-600 to-indigo-700 p-5 text-white shadow-sm md:p-6">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
@@ -2388,7 +2458,20 @@ export default function AdminDashboard() {
                     และต่อเนื่องครั้งละ 7 วัน
                   </p>
                 </div>
-                <BatchSelector />
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <BatchSelector />
+                  <button
+                    type="button"
+                    onClick={handleExportWeeklyPerformanceImage}
+                    disabled={exportingWeeklyPerformance}
+                    data-html2canvas-ignore="true"
+                    className="rounded-xl bg-white px-4 py-3 font-bold text-purple-700 shadow-sm transition hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {exportingWeeklyPerformance
+                      ? "กำลัง Export..."
+                      : "Export ทั้งหน้าเป็น PNG"}
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -2443,7 +2526,7 @@ export default function AdminDashboard() {
                   วันที่จับไก่สามารถกลับมาใส่ภายหลังได้จากเมนูจัดการรุ่น
                 </p>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" data-weekly-export-expand>
                 <table className="min-w-[1360px] w-full text-sm">
                   <thead className="bg-gray-100 text-gray-700">
                     <tr>
@@ -2520,7 +2603,7 @@ export default function AdminDashboard() {
                 </h3>
                 <p className="mt-1 text-sm text-gray-500">หน่วย: กรัม/ตัว · 6 สัปดาห์</p>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" data-weekly-export-expand>
                 <table className="min-w-[760px] w-full text-sm">
                   <thead className="bg-blue-50 text-blue-900">
                     <tr>
@@ -2577,7 +2660,7 @@ export default function AdminDashboard() {
                   {savingWeeklyWeights ? "กำลังบันทึก..." : "บันทึกน้ำหนักรายสัปดาห์"}
                 </button>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" data-weekly-export-expand>
                 <table className="min-w-[1220px] w-full text-sm">
                   <thead className="bg-purple-50 text-purple-900">
                     <tr>
@@ -2635,14 +2718,17 @@ export default function AdminDashboard() {
                                   }));
                                 }}
                                 className="w-28 rounded-lg border border-gray-300 px-3 py-2 text-right font-semibold outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-200"
-                                placeholder={
-                                  standardWeight == null ? "กรัม" : String(standardWeight)
-                                }
+                                placeholder="กรัม"
                               />
+                              <p className="mt-1 text-[10px] text-gray-500">
+                                {standardWeight == null
+                                  ? "ยังไม่ระบุเพศ"
+                                  : `มาตรฐาน ${standardWeight.toLocaleString()} กรัม`}
+                              </p>
                               <p
-                                className={`mt-1 min-h-8 text-[11px] font-semibold ${
+                                className={`min-h-4 text-[11px] font-semibold ${
                                   difference == null
-                                    ? "text-gray-400"
+                                    ? "text-transparent"
                                     : difference < 0
                                       ? "text-red-600"
                                       : difference > 0
@@ -2651,9 +2737,7 @@ export default function AdminDashboard() {
                                 }`}
                               >
                                 {difference == null
-                                  ? standardWeight == null
-                                    ? "ยังไม่ระบุเพศ"
-                                    : `มาตรฐาน ${standardWeight.toLocaleString()}`
+                                  ? "-"
                                   : `${difference >= 0 ? "+" : ""}${difference.toFixed(2)} กรัม (${differencePercentage! >= 0 ? "+" : ""}${differencePercentage!.toFixed(2)}%)`}
                               </p>
                             </td>
@@ -2663,9 +2747,9 @@ export default function AdminDashboard() {
                     ))}
                     <tr className="bg-gray-900 text-white">
                       <td colSpan={2} className="px-4 py-4 font-bold">
-                        ค่าเฉลี่ยรวมถ่วงน้ำหนักตามจำนวนไก่
+                        ค่าเฉลี่ยรวมทุกเล้า (ไม่ถ่วงตามจำนวนไก่)
                       </td>
-                      {weightedWeeklyAverageWeights.map((weight, index) => (
+                      {weeklyAverageWeights.map((weight, index) => (
                         <td key={index} className="px-4 py-4 text-center font-bold">
                           {weight == null ? "-" : `${weight.toFixed(2)} กรัม`}
                         </td>
@@ -2685,7 +2769,7 @@ export default function AdminDashboard() {
                   คำนวณจาก (ตาย + คัดในสัปดาห์) ÷ จำนวนไก่ลงเริ่มต้น × 100
                 </p>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" data-weekly-export-expand>
                 <table className="min-w-[1020px] w-full text-sm">
                   <thead className="bg-gray-100 text-gray-700">
                     <tr>
@@ -2760,7 +2844,7 @@ export default function AdminDashboard() {
                   Liveability = 100 − เปอร์เซ็นต์สูญเสียสะสม
                 </p>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto" data-weekly-export-expand>
                 <table className="min-w-[1040px] w-full text-sm">
                   <thead className="bg-gray-100 text-gray-700">
                     <tr>
