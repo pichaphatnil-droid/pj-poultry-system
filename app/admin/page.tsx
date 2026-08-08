@@ -2658,7 +2658,7 @@ export default function AdminDashboard() {
                     น้ำหนักจริงรายสัปดาห์เทียบมาตรฐาน
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    กด ✏️ เมื่อต้องการแก้ไข · ค่าบวกหมายถึงสูงกว่ามาตรฐาน
+                    กด ✏️ เมื่อต้องการแก้ไข · ค่า X = น้ำหนักจริง ÷ น้ำหนักแรกเข้า
                   </p>
                 </div>
                 <div
@@ -2731,9 +2731,12 @@ export default function AdminDashboard() {
                             Number.isFinite(actualWeight) && standardWeight != null
                               ? actualWeight - standardWeight
                               : null;
-                          const differencePercentage =
-                            difference != null && standardWeight
-                              ? (difference / standardWeight) * 100
+                          const initialWeight = item.profile?.initial_weight;
+                          const growthMultiple =
+                            Number.isFinite(actualWeight) &&
+                            initialWeight != null &&
+                            initialWeight > 0
+                              ? actualWeight / initialWeight
                               : null;
 
                           return (
@@ -2786,7 +2789,7 @@ export default function AdminDashboard() {
                               >
                                 {difference == null
                                   ? "-"
-                                  : `${difference >= 0 ? "+" : ""}${difference.toFixed(2)} กรัม (${differencePercentage! >= 0 ? "+" : ""}${differencePercentage!.toFixed(2)}%)`}
+                                  : `${difference >= 0 ? "+" : ""}${difference.toFixed(2)} กรัม${growthMultiple == null ? "" : ` · ${growthMultiple.toFixed(3)} เท่า`}`}
                               </p>
                             </td>
                           );
