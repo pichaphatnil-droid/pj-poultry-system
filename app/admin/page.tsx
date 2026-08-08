@@ -883,8 +883,12 @@ export default function AdminDashboard() {
         }
 
         const arrival = new Date(`${arrivalDate}T00:00:00`);
-        const weekStart = addDays(arrival, index * 7);
-        const weekEnd = addDays(weekStart, 6);
+        // Weekly Report ของฟาร์มนับวันที่ไก่เข้าเป็น DOC 0:
+        // Wk1 = DOC 0-7, Wk2 = DOC 8-14, ... , Wk6 = DOC 36-42
+        const startOffset = index === 0 ? 0 : index * 7 + 1;
+        const endOffset = (index + 1) * 7;
+        const weekStart = addDays(arrival, startOffset);
+        const weekEnd = addDays(arrival, endOffset);
         const startDate = format(weekStart, "yyyy-MM-dd");
         const endDate = format(weekEnd, "yyyy-MM-dd");
         const weekRecords = records.filter(
@@ -1001,7 +1005,7 @@ export default function AdminDashboard() {
     </select>
   );
 
-  const HouseDetailCards = ({ mode }: { mode: "new" | "edit" }) => {
+  const renderHouseDetailCards = (mode: "new" | "edit") => {
     const counts = mode === "new" ? newBatchHouseCounts : editHouseCounts;
     const details =
       mode === "new" ? newBatchHouseDetails : editHouseDetails;
@@ -2180,7 +2184,8 @@ export default function AdminDashboard() {
                     ประสิทธิภาพรายสัปดาห์ รุ่น {viewingBatch.batch_name}
                   </h2>
                   <p className="mt-2 text-sm text-purple-100">
-                    แต่ละสัปดาห์นับเป็นช่วงละ 7 วัน โดยเริ่มจากวันที่ไก่เข้าของแต่ละเล้า
+                    นับตามอายุไก่: Wk1 = DOC 0–7, Wk2 = DOC 8–14
+                    และต่อเนื่องครั้งละ 7 วัน
                   </p>
                 </div>
                 <BatchSelector />
@@ -2543,7 +2548,7 @@ export default function AdminDashboard() {
                       ).toLocaleString()} ตัว
                     </p>
                   </div>
-                  <HouseDetailCards mode="new" />
+                  {renderHouseDetailCards("new")}
                 </div>
                 <div className="mt-4 flex justify-end space-x-3">
                   <button
@@ -2583,7 +2588,7 @@ export default function AdminDashboard() {
                   </p>
                 </div>
 
-                <HouseDetailCards mode="edit" />
+                {renderHouseDetailCards("edit")}
 
                 <div className="mt-5 flex justify-end gap-3">
                   <button
