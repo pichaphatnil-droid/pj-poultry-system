@@ -72,6 +72,7 @@ interface WeightMeasurementSession {
 interface WeightCalculatorInput {
   sampleDate: string;
   birdsPerWeighing: string;
+  totalBirdsOverride: string;
   basketWeightKg: string;
   deductionPerBirdG: string;
   feedKg: string;
@@ -193,6 +194,7 @@ const createEmptyWeightCalculatorInput = (
 ): WeightCalculatorInput => ({
   sampleDate: getTodayThailand(),
   birdsPerWeighing: "50",
+  totalBirdsOverride: "",
   basketWeightKg: "0",
   deductionPerBirdG: "10",
   feedKg: String(DEFAULT_WEEKLY_FEED_KG[house] || 0),
@@ -207,9 +209,18 @@ const createWeightCalculatorInput = (
 ): WeightCalculatorInput => {
   if (!session) return createEmptyWeightCalculatorInput(house);
 
+  const completedReadingCount =
+    session.measurements?.flat().filter((value) => value != null).length ?? 0;
+  const automaticTotalBirds =
+    completedReadingCount * (session.birds_per_weighing || 50);
+
   return {
     sampleDate: session.sample_date || getTodayThailand(),
     birdsPerWeighing: String(session.birds_per_weighing || 50),
+    totalBirdsOverride:
+      session.total_birds > 0 && session.total_birds !== automaticTotalBirds
+        ? String(session.total_birds)
+        : "",
     basketWeightKg: String(session.basket_weight_kg ?? 0),
     deductionPerBirdG: String(session.deduction_per_bird_g ?? 10),
     feedKg: String(session.feed_kg ?? DEFAULT_WEEKLY_FEED_KG[house] ?? 0),
@@ -904,6 +915,12 @@ export default function AdminDashboard() {
       weightCalculatorInput.birdsPerWeighing,
       10,
     );
+    const totalBirdsOverride = Number.parseInt(
+      weightCalculatorInput.totalBirdsOverride,
+      10,
+    );
+    const hasTotalBirdsOverride =
+      weightCalculatorInput.totalBirdsOverride.trim() !== "";
     const basketWeightKg = Number.parseFloat(
       weightCalculatorInput.basketWeightKg,
     );
@@ -924,13 +941,23 @@ export default function AdminDashboard() {
       (sum, value) => sum + value,
       0,
     );
+    const automaticTotalBirds =
+      birdsPerWeighing > 0 ? completedReadings.length * birdsPerWeighing : 0;
+    const totalBirds =
+      hasTotalBirdsOverride &&
+      Number.isFinite(totalBirdsOverride) &&
+      totalBirdsOverride > 0
+        ? totalBirdsOverride
+        : automaticTotalBirds;
+    const weighingCountForBasket =
+      hasTotalBirdsOverride && birdsPerWeighing > 0
+        ? Math.ceil(totalBirds / birdsPerWeighing)
+        : completedReadings.length;
     const basketTotalKg =
       Number.isFinite(basketWeightKg) && basketWeightKg >= 0
-        ? completedReadings.length * basketWeightKg
+        ? weighingCountForBasket * basketWeightKg
         : 0;
     const netWeightKg = Math.max(0, grossWeightKg - basketTotalKg);
-    const totalBirds =
-      birdsPerWeighing > 0 ? completedReadings.length * birdsPerWeighing : 0;
     const rawAverageG = totalBirds
       ? (netWeightKg * 1000) / totalBirds
       : null;
@@ -1022,6 +1049,9 @@ export default function AdminDashboard() {
 
     return {
       birdsPerWeighing,
+      totalBirdsOverride,
+      hasTotalBirdsOverride,
+      automaticTotalBirds,
       basketWeightKg,
       deductionPerBirdG,
       feedKg,
@@ -1060,12 +1090,20 @@ export default function AdminDashboard() {
       alert("กรุณาบันทึกข้อมูลประจำเล้าก่อนคำนวณน้ำหนัก");
       return;
     }
-    if (summary.completedReadings !== WEIGHING_POSITIONS.length * 2) {
-      alert("กรุณากรอกน้ำหนักให้ครบ 9 จุด จุดละ 2 ครั้ง รวม 18 ค่า");
+    if (summary.completedReadings < 1) {
+      alert("กรุณากรอกน้ำหนักอย่างน้อย 1 ค่า");
       return;
     }
     if (!(summary.birdsPerWeighing > 0)) {
       alert("จำนวนไก่ต่อครั้งต้องมากกว่า 0");
+      return;
+    }
+    if (
+      summary.hasTotalBirdsOverride &&
+      (!Number.isFinite(summary.totalBirdsOverride) ||
+        summary.totalBirdsOverride <= 0)
+    ) {
+      alert("จำนวนไก่ที่ชั่งรวมต้องเป็นจำนวนเต็มมากกว่า 0");
       return;
     }
     if (
@@ -3622,7 +3660,7 @@ export default function AdminDashboard() {
                     คำนวณน้ำหนักไก่และแสดงประสิทธิภาพ
                   </h2>
                   <p className="mt-2 text-sm text-emerald-100">
-                    ชั่ง 9 จุด จุดละ 2 ครั้ง · คำนวณน้ำหนักสุทธิ ADG ค่า X และโบนัสเฉพาะ Wk1
+                    รองรับสูงสุด 9 จุด จุดละ 2 ครั้ง · ไม่จำเป็นต้องกรอกครบทุกช่อง
                   </p>
                 </div>
                 <BatchSelector />
@@ -3630,7 +3668,7 @@ export default function AdminDashboard() {
             </div>
 
             <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-7">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <div>
                   <label className="mb-1 block text-xs font-bold text-gray-600">
                     เล้า
@@ -3703,6 +3741,28 @@ export default function AdminDashboard() {
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-bold text-gray-600">
+                    จำนวนไก่ที่ชั่งรวม
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={weightCalculatorInput.totalBirdsOverride}
+                    onChange={(event) =>
+                      setWeightCalculatorInput((current) => ({
+                        ...current,
+                        totalBirdsOverride: event.target.value,
+                      }))
+                    }
+                    placeholder="เช่น 900"
+                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-right font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+                  />
+                  <p className="mt-1 text-[11px] text-gray-400">
+                    เว้นว่างเพื่อให้ระบบนับตามจำนวนช่อง
+                  </p>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-bold text-gray-600">
                     น้ำหนักตะกร้า/ครั้ง (กก.)
                   </label>
                   <input
@@ -3764,7 +3824,7 @@ export default function AdminDashboard() {
                   น้ำหนักจากจุดชั่ง 9 จุด
                 </h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  กรอกน้ำหนักรวมตะกร้าเป็นกิโลกรัม ระบบจะหักน้ำหนักตะกร้าต่อครั้งและหักกระเพาะต่อไก่อัตโนมัติ
+                  กรอกเฉพาะจุดที่ชั่งได้ หรือรวมน้ำหนักทุกครั้งไว้ช่องแรกแล้วใส่จำนวนไก่ที่ชั่งรวม เช่น 900 ตัว
                 </p>
               </div>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -3949,7 +4009,7 @@ export default function AdminDashboard() {
                 </p>
                 <p className="mt-1 text-sm text-emerald-700">
                   {weightCalculatorSummary.differenceFromStandard == null
-                    ? "กรอกข้อมูลให้ครบเพื่อดูผลเปรียบเทียบ"
+                    ? "กรอกน้ำหนักอย่างน้อย 1 ค่าเพื่อดูผลเปรียบเทียบ"
                     : `${weightCalculatorSummary.differenceFromStandard >= 0 ? "สูงกว่า" : "ต่ำกว่า"}มาตรฐาน ${Math.abs(weightCalculatorSummary.differenceFromStandard).toFixed(2)} กรัม · ADG มาตรฐาน ${weightCalculatorSummary.standardAdg?.toFixed(2) || "-"}`}
                 </p>
               </div>
