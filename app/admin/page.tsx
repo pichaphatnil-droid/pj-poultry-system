@@ -2512,14 +2512,14 @@ export default function AdminDashboard() {
                         className: "border-red-100 bg-red-50 text-red-700",
                       },
                       {
-                        label: "ตายบ่าย",
-                        value: selectedHousePeriodTotals.afternoonDead,
-                        className: "border-rose-100 bg-rose-50 text-rose-700",
-                      },
-                      {
                         label: "คัดเช้า",
                         value: selectedHousePeriodTotals.morningCulled,
                         className: "border-orange-100 bg-orange-50 text-orange-700",
+                      },
+                      {
+                        label: "ตายบ่าย",
+                        value: selectedHousePeriodTotals.afternoonDead,
+                        className: "border-rose-100 bg-rose-50 text-rose-700",
                       },
                       {
                         label: "คัดบ่าย",
@@ -2648,8 +2648,8 @@ export default function AdminDashboard() {
                           <th className="px-4 py-3 text-left font-bold">วันที่</th>
                           <th className="px-4 py-3 text-center font-bold">วันที่ของรุ่น</th>
                           <th className="px-4 py-3 text-center font-bold text-red-600">ตายเช้า</th>
-                          <th className="px-4 py-3 text-center font-bold text-rose-700">ตายบ่าย</th>
                           <th className="px-4 py-3 text-center font-bold text-orange-600">คัดเช้า</th>
+                          <th className="px-4 py-3 text-center font-bold text-rose-700">ตายบ่าย</th>
                           <th className="px-4 py-3 text-center font-bold text-amber-700">คัดบ่าย</th>
                           <th className="px-4 py-3 text-center font-bold text-red-700">ตายรวม</th>
                           <th className="px-4 py-3 text-center font-bold text-orange-700">คัดรวม</th>
@@ -2670,11 +2670,11 @@ export default function AdminDashboard() {
                             <td className="px-4 py-3 text-center font-semibold text-red-600">
                               {day.hasRecord ? day.morningDead : "-"}
                             </td>
-                            <td className="px-4 py-3 text-center font-semibold text-rose-700">
-                              {day.hasRecord ? day.afternoonDead : "-"}
-                            </td>
                             <td className="px-4 py-3 text-center font-semibold text-orange-600">
                               {day.hasRecord ? day.morningCulled : "-"}
+                            </td>
+                            <td className="px-4 py-3 text-center font-semibold text-rose-700">
+                              {day.hasRecord ? day.afternoonDead : "-"}
                             </td>
                             <td className="px-4 py-3 text-center font-semibold text-amber-700">
                               {day.hasRecord ? day.afternoonCulled : "-"}
