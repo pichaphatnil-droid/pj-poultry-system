@@ -1598,6 +1598,10 @@ export default function AdminDashboard() {
           day: day.day,
           date: day.date,
           dateDisplay: day.dateDisplay,
+          morningDead: record?.morning_dead ?? 0,
+          afternoonDead: record?.afternoon_dead ?? 0,
+          morningCulled: record?.morning_culled ?? 0,
+          afternoonCulled: record?.afternoon_culled ?? 0,
           dead: day.houses[house].dead,
           culled: day.houses[house].culled,
           total: day.houses[house].total,
@@ -1745,6 +1749,20 @@ export default function AdminDashboard() {
     ? (selectedHouseDailyData.reduce((sum, day) => sum + day.total, 0) /
         selectedHouseDailyData.length).toFixed(1)
     : "0.0";
+  const selectedHousePeriodTotals = selectedHouseDailyData.reduce(
+    (totals, day) => ({
+      morningDead: totals.morningDead + day.morningDead,
+      afternoonDead: totals.afternoonDead + day.afternoonDead,
+      morningCulled: totals.morningCulled + day.morningCulled,
+      afternoonCulled: totals.afternoonCulled + day.afternoonCulled,
+    }),
+    {
+      morningDead: 0,
+      afternoonDead: 0,
+      morningCulled: 0,
+      afternoonCulled: 0,
+    },
+  );
   const selectedHousePeakDay = selectedHouseDailyData.reduce<any | null>(
     (peak, day) => (!peak || day.total > peak.total ? day : peak),
     null,
@@ -2477,6 +2495,52 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 md:p-5">
+                  <div className="mb-4">
+                    <h4 className="text-base font-bold text-gray-900">
+                      ยอดสะสมแยกเช้า–บ่าย
+                    </h4>
+                    <p className="mt-1 text-sm text-gray-500">
+                      แยกจำนวนตายและคัดของเล้า {selectedHouse} ตามช่วงเวลาที่บันทึก
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    {[
+                      {
+                        label: "ตายเช้า",
+                        value: selectedHousePeriodTotals.morningDead,
+                        className: "border-red-100 bg-red-50 text-red-700",
+                      },
+                      {
+                        label: "ตายบ่าย",
+                        value: selectedHousePeriodTotals.afternoonDead,
+                        className: "border-rose-100 bg-rose-50 text-rose-700",
+                      },
+                      {
+                        label: "คัดเช้า",
+                        value: selectedHousePeriodTotals.morningCulled,
+                        className: "border-orange-100 bg-orange-50 text-orange-700",
+                      },
+                      {
+                        label: "คัดบ่าย",
+                        value: selectedHousePeriodTotals.afternoonCulled,
+                        className: "border-amber-100 bg-amber-50 text-amber-700",
+                      },
+                    ].map((item) => (
+                      <div
+                        key={item.label}
+                        className={`rounded-xl border p-4 ${item.className}`}
+                      >
+                        <p className="text-xs font-bold opacity-80">{item.label}</p>
+                        <p className="mt-1 text-2xl font-bold">
+                          {item.value.toLocaleString()}
+                        </p>
+                        <p className="mt-1 text-xs opacity-70">ตัวสะสม</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="rounded-2xl border border-gray-200 bg-white p-4 md:p-6">
                   <div className="mb-4 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                     <div>
@@ -2578,13 +2642,17 @@ export default function AdminDashboard() {
                     </p>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="min-w-[980px] w-full text-sm">
+                    <table className="min-w-[1320px] w-full text-sm">
                       <thead className="bg-gray-100 text-gray-700">
                         <tr>
                           <th className="px-4 py-3 text-left font-bold">วันที่</th>
                           <th className="px-4 py-3 text-center font-bold">วันที่ของรุ่น</th>
-                          <th className="px-4 py-3 text-center font-bold text-red-700">ตาย</th>
-                          <th className="px-4 py-3 text-center font-bold text-orange-700">คัด</th>
+                          <th className="px-4 py-3 text-center font-bold text-red-600">ตายเช้า</th>
+                          <th className="px-4 py-3 text-center font-bold text-rose-700">ตายบ่าย</th>
+                          <th className="px-4 py-3 text-center font-bold text-orange-600">คัดเช้า</th>
+                          <th className="px-4 py-3 text-center font-bold text-amber-700">คัดบ่าย</th>
+                          <th className="px-4 py-3 text-center font-bold text-red-700">ตายรวม</th>
+                          <th className="px-4 py-3 text-center font-bold text-orange-700">คัดรวม</th>
                           <th className="px-4 py-3 text-center font-bold">รวม</th>
                           <th className="px-4 py-3 text-center font-bold">อุณหภูมินอกเล้า</th>
                           <th className="px-4 py-3 text-center font-bold">อุณหภูมิในเล้า</th>
@@ -2599,6 +2667,18 @@ export default function AdminDashboard() {
                               {day.dateDisplay}
                             </td>
                             <td className="px-4 py-3 text-center text-gray-600">{day.day}</td>
+                            <td className="px-4 py-3 text-center font-semibold text-red-600">
+                              {day.hasRecord ? day.morningDead : "-"}
+                            </td>
+                            <td className="px-4 py-3 text-center font-semibold text-rose-700">
+                              {day.hasRecord ? day.afternoonDead : "-"}
+                            </td>
+                            <td className="px-4 py-3 text-center font-semibold text-orange-600">
+                              {day.hasRecord ? day.morningCulled : "-"}
+                            </td>
+                            <td className="px-4 py-3 text-center font-semibold text-amber-700">
+                              {day.hasRecord ? day.afternoonCulled : "-"}
+                            </td>
                             <td className="px-4 py-3 text-center font-semibold text-red-700">
                               {day.hasRecord ? day.dead : "-"}
                             </td>
