@@ -61,7 +61,6 @@ interface WeightMeasurementSession {
   birds_per_weighing: number;
   basket_weight_kg: number;
   deduction_per_bird_g: number;
-  feed_kg: number | null;
   measurements: Array<[number | null, number | null]>;
   total_weight_kg: number;
   total_birds: number;
@@ -75,7 +74,6 @@ interface WeightCalculatorInput {
   totalBirdsOverride: string;
   basketWeightKg: string;
   deductionPerBirdG: string;
-  feedKg: string;
   measurements: Record<string, [string, string]>;
 }
 
@@ -112,16 +110,7 @@ const HOUSE_AREAS: Record<number, number> = {
 const BATCH_HOUSE_SELECT =
   "batch_id, house_number, initial_count, arrival_date, capture_date, chicken_sex, breed, initial_weight, weekly_weight_1, weekly_weight_2, weekly_weight_3, weekly_weight_4, weekly_weight_5, weekly_weight_6";
 const WEIGHT_SESSION_SELECT =
-  "batch_id, house_number, week_number, sample_date, birds_per_weighing, basket_weight_kg, deduction_per_bird_g, feed_kg, measurements, total_weight_kg, total_birds, raw_average_g, adjusted_average_g";
-const DEFAULT_WEEKLY_FEED_KG: Record<number, number> = {
-  1: 6000,
-  2: 6500,
-  3: 6500,
-  4: 6500,
-  5: 6500,
-  6: 6000,
-  7: 6300,
-};
+  "batch_id, house_number, week_number, sample_date, birds_per_weighing, basket_weight_kg, deduction_per_bird_g, measurements, total_weight_kg, total_birds, raw_average_g, adjusted_average_g";
 const WEIGHING_POSITIONS = [
   { key: "front_left", zone: "หน้า", side: "ซ้าย" },
   { key: "front_center", zone: "หน้า", side: "กลาง" },
@@ -189,16 +178,12 @@ const createWeeklyWeightInputs = (
   return inputs;
 };
 
-const createEmptyWeightCalculatorInput = (
-  house = 1,
-  week = 1,
-): WeightCalculatorInput => ({
+const createEmptyWeightCalculatorInput = (): WeightCalculatorInput => ({
   sampleDate: getTodayThailand(),
   birdsPerWeighing: "50",
   totalBirdsOverride: "",
   basketWeightKg: "0",
   deductionPerBirdG: "10",
-  feedKg: week === 1 ? String(DEFAULT_WEEKLY_FEED_KG[house] || 0) : "",
   measurements: Object.fromEntries(
     WEIGHING_POSITIONS.map((position) => [position.key, ["", ""]]),
   ),
@@ -206,10 +191,8 @@ const createEmptyWeightCalculatorInput = (
 
 const createWeightCalculatorInput = (
   session?: WeightMeasurementSession,
-  house = 1,
-  week = 1,
 ): WeightCalculatorInput => {
-  if (!session) return createEmptyWeightCalculatorInput(house, week);
+  if (!session) return createEmptyWeightCalculatorInput();
 
   const completedReadingCount =
     session.measurements?.flat().filter((value) => value != null).length ?? 0;
@@ -225,12 +208,6 @@ const createWeightCalculatorInput = (
         : "",
     basketWeightKg: String(session.basket_weight_kg ?? 0),
     deductionPerBirdG: String(session.deduction_per_bird_g ?? 10),
-    feedKg:
-      session.feed_kg != null
-        ? String(session.feed_kg)
-        : week === 1
-          ? String(DEFAULT_WEEKLY_FEED_KG[house] ?? 0)
-          : "",
     measurements: Object.fromEntries(
       WEIGHING_POSITIONS.map((position, index) => [
         position.key,
@@ -342,8 +319,6 @@ export default function AdminDashboard() {
     setWeightCalculatorInput(
       createWeightCalculatorInput(
         weightSessions[sessionKey],
-        weightCalculatorHouse,
-        weightCalculatorWeek,
       ),
     );
   }, [weightCalculatorHouse, weightCalculatorWeek, weightSessions]);
@@ -935,7 +910,6 @@ export default function AdminDashboard() {
     const deductionPerBirdG = Number.parseFloat(
       weightCalculatorInput.deductionPerBirdG,
     );
-    const feedKg = Number.parseFloat(weightCalculatorInput.feedKg);
     const measurements = WEIGHING_POSITIONS.map((position) =>
       weightCalculatorInput.measurements[position.key].map((value) => {
         const parsed = Number.parseFloat(value);
@@ -1050,43 +1024,6 @@ export default function AdminDashboard() {
       0,
       (profile?.initial_count || 0) - cumulativeLoss,
     );
-    const previousFeedValues = Array.from(
-      { length: Math.max(0, weightCalculatorWeek - 1) },
-      (_, index) => {
-        const savedFeed = weightSessions[
-          `${weightCalculatorHouse}-${index + 1}`
-        ]?.feed_kg;
-        const value = Number(
-          savedFeed ??
-            (index === 0 ? DEFAULT_WEEKLY_FEED_KG[weightCalculatorHouse] : NaN),
-        );
-        return Number.isFinite(value) && value > 0 ? value : null;
-      },
-    );
-    const hasCompleteFeedHistory = previousFeedValues.every(
-      (value) => value != null,
-    );
-    const cumulativeFeedKg =
-      hasCompleteFeedHistory && Number.isFinite(feedKg) && feedKg > 0
-        ? previousFeedValues.reduce(
-            (sum, value) => sum + (value ?? 0),
-            feedKg,
-          )
-        : null;
-    const feedPerBirdG =
-      cumulativeFeedKg != null && remainingChickens > 0
-        ? (cumulativeFeedKg * 1000) / remainingChickens
-        : null;
-    const cumulativeWeightGainG =
-      adjustedAverageG != null && initialWeight != null
-        ? adjustedAverageG - initialWeight
-        : null;
-    const farmFcr =
-      cumulativeWeightGainG != null &&
-      cumulativeWeightGainG > 0 &&
-      feedPerBirdG != null
-        ? feedPerBirdG / cumulativeWeightGainG
-        : null;
 
     return {
       birdsPerWeighing,
@@ -1095,7 +1032,6 @@ export default function AdminDashboard() {
       automaticTotalBirds,
       basketWeightKg,
       deductionPerBirdG,
-      feedKg,
       measurements,
       completedReadings: completedReadings.length,
       grossWeightKg,
@@ -1113,10 +1049,6 @@ export default function AdminDashboard() {
       standardAdg,
       cumulativeLoss,
       remainingChickens,
-      cumulativeFeedKg,
-      cumulativeWeightGainG,
-      feedPerBirdG,
-      farmFcr,
       differenceFromStandard:
         adjustedAverageG != null && standardWeight != null
           ? adjustedAverageG - standardWeight
@@ -1155,14 +1087,12 @@ export default function AdminDashboard() {
       summary.basketWeightKg < 0 ||
       !Number.isFinite(summary.deductionPerBirdG) ||
       summary.deductionPerBirdG < 0 ||
-      !Number.isFinite(summary.feedKg) ||
-      summary.feedKg <= 0 ||
       summary.rawAverageG == null ||
       summary.rawAverageG <= 0 ||
       summary.adjustedAverageG == null ||
       summary.adjustedAverageG <= 0
     ) {
-      alert("กรุณาตรวจสอบน้ำหนักรวม น้ำหนักตะกร้า น้ำหนักหักกระเพาะ และอาหารต่อสัปดาห์");
+      alert("กรุณาตรวจสอบน้ำหนักรวม น้ำหนักตะกร้า และน้ำหนักหักกระเพาะ");
       return;
     }
 
@@ -1178,7 +1108,6 @@ export default function AdminDashboard() {
         birds_per_weighing: summary.birdsPerWeighing,
         basket_weight_kg: summary.basketWeightKg,
         deduction_per_bird_g: summary.deductionPerBirdG,
-        feed_kg: summary.feedKg,
         measurements: summary.measurements,
         total_weight_kg: Number(summary.grossWeightKg.toFixed(3)),
         total_birds: summary.totalBirds,
@@ -1849,9 +1778,6 @@ export default function AdminDashboard() {
   const weightCalculatorSummary = calculateWeightCalculatorSummary();
   const growthPerformanceRows = HOUSE_NUMBERS.map((house) => {
     const profile = housePerformanceData[house];
-    const weeklyLossData = weeklyHousePerformance.find(
-      (item) => item.house === house,
-    );
     const standards = profile?.chicken_sex
       ? WEIGHT_STANDARDS[profile.chicken_sex].weights
       : [];
@@ -1865,53 +1791,9 @@ export default function AdminDashboard() {
       const standardWeight = standards[index] ?? null;
       const previousStandardWeight =
         index === 0 ? profile?.initial_weight : standards[index - 1] ?? null;
-      const savedSession = weightSessions[`${house}-${index + 1}`];
-      const feedKgValue = Number(
-        savedSession?.feed_kg ??
-          (index === 0 ? DEFAULT_WEEKLY_FEED_KG[house] : NaN),
-      );
-      const feedKg =
-        Number.isFinite(feedKgValue) && feedKgValue > 0 ? feedKgValue : null;
-      const cumulativeFeedValues = Array.from(
-        { length: index + 1 },
-        (_, weekIndex) => {
-          const value = Number(
-            weightSessions[`${house}-${weekIndex + 1}`]?.feed_kg ??
-              (weekIndex === 0 ? DEFAULT_WEEKLY_FEED_KG[house] : NaN),
-          );
-          return Number.isFinite(value) && value > 0 ? value : null;
-        },
-      );
-      const cumulativeFeedKg = cumulativeFeedValues.every(
-        (value) => value != null,
-      )
-        ? cumulativeFeedValues.reduce((sum, value) => sum + (value ?? 0), 0)
-        : null;
-      const cumulativeLoss =
-        weeklyLossData?.weeks
-          .slice(0, index + 1)
-          .reduce((sum, week) => sum + week.total, 0) ?? 0;
-      const remainingChickens = Math.max(
-        0,
-        (profile?.initial_count || 0) - cumulativeLoss,
-      );
-      const feedPerBirdG =
-        cumulativeFeedKg != null && cumulativeFeedKg > 0 && remainingChickens > 0
-          ? (cumulativeFeedKg * 1000) / remainingChickens
-          : null;
       const weightGainG =
         actualWeight != null && previousActualWeight != null
           ? Number(actualWeight) - Number(previousActualWeight)
-          : null;
-      const cumulativeWeightGainG =
-        actualWeight != null && profile?.initial_weight != null
-          ? Number(actualWeight) - Number(profile.initial_weight)
-          : null;
-      const farmFcr =
-        cumulativeWeightGainG != null &&
-        cumulativeWeightGainG > 0 &&
-        feedPerBirdG != null
-          ? feedPerBirdG / cumulativeWeightGainG
           : null;
 
       return {
@@ -1927,12 +1809,6 @@ export default function AdminDashboard() {
           standardWeight != null && previousStandardWeight != null
             ? (standardWeight - previousStandardWeight) / 7
             : null,
-        feedKg,
-        cumulativeFeedKg,
-        cumulativeWeightGainG,
-        remainingChickens,
-        feedPerBirdG,
-        farmFcr,
       };
     });
 
@@ -1959,17 +1835,6 @@ export default function AdminDashboard() {
       .filter((value): value is number => value != null)
       .map(Number)
       .filter(Number.isFinite);
-    const feedPerBirdValues = growthPerformanceRows
-      .map((row) => row.weeks[index].feedPerBirdG)
-      .filter((value): value is number => value != null)
-      .map(Number)
-      .filter(Number.isFinite);
-    const farmFcrValues = growthPerformanceRows
-      .map((row) => row.weeks[index].farmFcr)
-      .filter((value): value is number => value != null)
-      .map(Number)
-      .filter(Number.isFinite);
-
     return {
       actualWeight: actualWeights.length
         ? actualWeights.reduce((sum, value) => sum + value, 0) /
@@ -1985,14 +1850,6 @@ export default function AdminDashboard() {
       standardAdg: standardAdgs.length
         ? standardAdgs.reduce((sum, value) => sum + value, 0) /
           standardAdgs.length
-        : null,
-      feedPerBirdG: feedPerBirdValues.length
-        ? feedPerBirdValues.reduce((sum, value) => sum + value, 0) /
-          feedPerBirdValues.length
-        : null,
-      farmFcr: farmFcrValues.length
-        ? farmFcrValues.reduce((sum, value) => sum + value, 0) /
-          farmFcrValues.length
         : null,
     };
   });
@@ -3952,24 +3809,6 @@ export default function AdminDashboard() {
                     className="w-full rounded-xl border border-gray-300 px-4 py-3 text-right font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
                   />
                 </div>
-                <div>
-                  <label className="mb-1 block text-xs font-bold text-gray-600">
-                    อาหารต่อสัปดาห์ (กก.)
-                  </label>
-                  <input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={weightCalculatorInput.feedKg}
-                    onChange={(event) =>
-                      setWeightCalculatorInput((current) => ({
-                        ...current,
-                        feedKg: event.target.value,
-                      }))
-                    }
-                    className="w-full rounded-xl border border-gray-300 px-4 py-3 text-right font-bold outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-                  />
-                </div>
               </div>
             </div>
 
@@ -4096,22 +3935,6 @@ export default function AdminDashboard() {
                   color: "cyan",
                 },
                 {
-                  label: "อาหารสะสมต่อไก่",
-                  value:
-                    weightCalculatorSummary.feedPerBirdG == null
-                      ? "-"
-                      : `${weightCalculatorSummary.feedPerBirdG.toFixed(2)} กรัม`,
-                  color: "blue",
-                },
-                {
-                  label: "FCR มาตรฐาน",
-                  value:
-                    weightCalculatorSummary.farmFcr == null
-                      ? "-"
-                      : weightCalculatorSummary.farmFcr.toFixed(2),
-                  color: "purple",
-                },
-                {
                   label: "ADG",
                   value:
                     weightCalculatorSummary.actualAdg == null
@@ -4190,7 +4013,7 @@ export default function AdminDashboard() {
                     ตารางแสดงการเจริญเติบโต
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    ADG = (น้ำหนักสัปดาห์ปัจจุบัน − น้ำหนักสัปดาห์ก่อน) ÷ 7 · FCR = อาหารกินสะสมต่อไก่ ÷ (น้ำหนักเฉลี่ยปัจจุบัน − น้ำหนักแรกเข้า)
+                    ADG = (น้ำหนักสัปดาห์ปัจจุบัน − น้ำหนักสัปดาห์ก่อน) ÷ 7
                   </p>
                 </div>
                 <button
@@ -4206,7 +4029,7 @@ export default function AdminDashboard() {
                 </button>
               </div>
               <div className="overflow-x-auto" data-growth-export-scroll>
-                <table className="min-w-[3300px] w-full text-xs">
+                <table className="min-w-[2300px] w-full text-xs">
                   <thead>
                     <tr className="bg-orange-50 text-orange-950">
                       <th rowSpan={2} className="border border-gray-300 px-3 py-3">H</th>
@@ -4214,7 +4037,7 @@ export default function AdminDashboard() {
                       {WEEKLY_WEIGHT_FIELDS.map((_, index) => (
                         <th
                           key={index}
-                          colSpan={6}
+                          colSpan={4}
                           className="border border-gray-300 px-3 py-3 text-center text-sm font-bold"
                         >
                           {(index + 1) * 7} วัน · Wk{index + 1}
@@ -4227,8 +4050,6 @@ export default function AdminDashboard() {
                         <th key={`${index}-std`} className="border border-gray-300 px-3 py-2">AA Std</th>,
                         <th key={`${index}-adg`} className="border border-gray-300 px-3 py-2">ADG</th>,
                         <th key={`${index}-std-adg`} className="border border-gray-300 px-3 py-2">Std ADG</th>,
-                        <th key={`${index}-feed-bird`} className="border border-gray-300 px-3 py-2">อาหารสะสม/ตัว</th>,
-                        <th key={`${index}-fcr`} className="border border-gray-300 px-3 py-2">FCR</th>,
                       ])}
                     </tr>
                   </thead>
@@ -4266,12 +4087,6 @@ export default function AdminDashboard() {
                             <td key={`${week.week}-std-adg`} className="border border-gray-300 bg-orange-50 px-3 py-3 text-center">
                               {week.standardAdg == null ? "-" : week.standardAdg.toFixed(2)}
                             </td>,
-                            <td key={`${week.week}-feed-bird`} className="border border-gray-300 bg-blue-50 px-3 py-3 text-center font-semibold">
-                              {week.feedPerBirdG == null ? "-" : week.feedPerBirdG.toFixed(2)}
-                            </td>,
-                            <td key={`${week.week}-fcr`} className="border border-gray-300 bg-purple-50 px-3 py-3 text-center font-bold text-purple-800">
-                              {week.farmFcr == null ? "-" : week.farmFcr.toFixed(2)}
-                            </td>,
                           ];
                         })}
                       </tr>
@@ -4292,12 +4107,6 @@ export default function AdminDashboard() {
                         </td>,
                         <td key={`${index}-std-adg`} className="border border-gray-700 px-3 py-4 text-center font-bold">
                           {average.standardAdg == null ? "-" : average.standardAdg.toFixed(2)}
-                        </td>,
-                        <td key={`${index}-feed-bird`} className="border border-gray-700 px-3 py-4 text-center font-bold">
-                          {average.feedPerBirdG == null ? "-" : average.feedPerBirdG.toFixed(2)}
-                        </td>,
-                        <td key={`${index}-fcr`} className="border border-gray-700 px-3 py-4 text-center font-bold">
-                          {average.farmFcr == null ? "-" : average.farmFcr.toFixed(2)}
                         </td>,
                       ])}
                     </tr>
