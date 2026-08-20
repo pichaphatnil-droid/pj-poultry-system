@@ -992,9 +992,13 @@ export default function AdminDashboard() {
       weightCalculatorWeek === 1
         ? initialWeight
         : profile?.[WEEKLY_WEIGHT_FIELDS[weightCalculatorWeek - 2]];
-    const actualAdg =
+    const weightGainG =
       adjustedAverageG != null && previousActualWeight != null
-        ? (adjustedAverageG - previousActualWeight) / 7
+        ? adjustedAverageG - Number(previousActualWeight)
+        : null;
+    const actualAdg =
+      weightGainG != null
+        ? weightGainG / 7
         : null;
     const previousStandardWeight =
       weightCalculatorWeek === 1
@@ -1038,13 +1042,27 @@ export default function AdminDashboard() {
       0,
       (profile?.initial_count || 0) - cumulativeLoss,
     );
+    const previousFeedKg = Array.from(
+      { length: Math.max(0, weightCalculatorWeek - 1) },
+      (_, index) =>
+        Number(
+          weightSessions[`${weightCalculatorHouse}-${index + 1}`]?.feed_kg ??
+            DEFAULT_WEEKLY_FEED_KG[weightCalculatorHouse] ??
+            0,
+        ),
+    ).reduce(
+      (sum, value) => sum + (Number.isFinite(value) && value > 0 ? value : 0),
+      0,
+    );
+    const cumulativeFeedKg =
+      Number.isFinite(feedKg) && feedKg > 0 ? previousFeedKg + feedKg : null;
     const feedPerBirdG =
-      Number.isFinite(feedKg) && feedKg > 0 && remainingChickens > 0
-        ? (feedKg * 1000) / remainingChickens
+      cumulativeFeedKg != null && remainingChickens > 0
+        ? (cumulativeFeedKg * 1000) / remainingChickens
         : null;
     const farmFcr =
-      adjustedAverageG != null && feedPerBirdG != null && feedPerBirdG > 0
-        ? adjustedAverageG / feedPerBirdG
+      adjustedAverageG != null && adjustedAverageG > 0 && feedPerBirdG != null
+        ? feedPerBirdG / adjustedAverageG
         : null;
 
     return {
@@ -1067,10 +1085,12 @@ export default function AdminDashboard() {
       roundedGrowthMultiple,
       bonusAmount,
       standardWeight,
+      weightGainG,
       actualAdg,
       standardAdg,
       cumulativeLoss,
       remainingChickens,
+      cumulativeFeedKg,
       feedPerBirdG,
       farmFcr,
       differenceFromStandard:
@@ -1825,6 +1845,19 @@ export default function AdminDashboard() {
       const feedKg = Number(
         savedSession?.feed_kg ?? DEFAULT_WEEKLY_FEED_KG[house] ?? 0,
       );
+      const cumulativeFeedKg = Array.from(
+        { length: index + 1 },
+        (_, weekIndex) =>
+          Number(
+            weightSessions[`${house}-${weekIndex + 1}`]?.feed_kg ??
+              DEFAULT_WEEKLY_FEED_KG[house] ??
+              0,
+          ),
+      ).reduce(
+        (sum, value) =>
+          sum + (Number.isFinite(value) && value > 0 ? value : 0),
+        0,
+      );
       const cumulativeLoss =
         weeklyLossData?.weeks
           .slice(0, index + 1)
@@ -1834,27 +1867,33 @@ export default function AdminDashboard() {
         (profile?.initial_count || 0) - cumulativeLoss,
       );
       const feedPerBirdG =
-        feedKg > 0 && remainingChickens > 0
-          ? (feedKg * 1000) / remainingChickens
+        cumulativeFeedKg > 0 && remainingChickens > 0
+          ? (cumulativeFeedKg * 1000) / remainingChickens
+          : null;
+      const weightGainG =
+        actualWeight != null && previousActualWeight != null
+          ? Number(actualWeight) - Number(previousActualWeight)
           : null;
       const farmFcr =
-        actualWeight != null && feedPerBirdG != null && feedPerBirdG > 0
-          ? Number(actualWeight) / feedPerBirdG
+        actualWeight != null && Number(actualWeight) > 0 && feedPerBirdG != null
+          ? feedPerBirdG / Number(actualWeight)
           : null;
 
       return {
         week: index + 1,
         actualWeight,
         standardWeight,
+        weightGainG,
         actualAdg:
-          actualWeight != null && previousActualWeight != null
-            ? (actualWeight - previousActualWeight) / 7
+          weightGainG != null
+            ? weightGainG / 7
             : null,
         standardAdg:
           standardWeight != null && previousStandardWeight != null
             ? (standardWeight - previousStandardWeight) / 7
             : null,
         feedKg,
+        cumulativeFeedKg,
         remainingChickens,
         feedPerBirdG,
         farmFcr,
@@ -4021,7 +4060,7 @@ export default function AdminDashboard() {
                   color: "cyan",
                 },
                 {
-                  label: "อาหารต่อไก่",
+                  label: "อาหารสะสมต่อไก่",
                   value:
                     weightCalculatorSummary.feedPerBirdG == null
                       ? "-"
@@ -4029,7 +4068,7 @@ export default function AdminDashboard() {
                   color: "blue",
                 },
                 {
-                  label: "FCR ฟาร์ม",
+                  label: "FCR มาตรฐาน",
                   value:
                     weightCalculatorSummary.farmFcr == null
                       ? "-"
@@ -4115,7 +4154,7 @@ export default function AdminDashboard() {
                     ตารางแสดงการเจริญเติบโต
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    ADG = (น้ำหนักสัปดาห์ปัจจุบัน − น้ำหนักสัปดาห์ก่อน) ÷ 7 · FCR ฟาร์ม = น้ำหนักเฉลี่ย ÷ อาหารต่อไก่
+                    ADG = (น้ำหนักสัปดาห์ปัจจุบัน − น้ำหนักสัปดาห์ก่อน) ÷ 7 · FCR = อาหารกินสะสมต่อไก่ ÷ น้ำหนักเฉลี่ยปัจจุบัน
                   </p>
                 </div>
                 <button
@@ -4152,7 +4191,7 @@ export default function AdminDashboard() {
                         <th key={`${index}-std`} className="border border-gray-300 px-3 py-2">AA Std</th>,
                         <th key={`${index}-adg`} className="border border-gray-300 px-3 py-2">ADG</th>,
                         <th key={`${index}-std-adg`} className="border border-gray-300 px-3 py-2">Std ADG</th>,
-                        <th key={`${index}-feed-bird`} className="border border-gray-300 px-3 py-2">อาหาร/ตัว</th>,
+                        <th key={`${index}-feed-bird`} className="border border-gray-300 px-3 py-2">อาหารสะสม/ตัว</th>,
                         <th key={`${index}-fcr`} className="border border-gray-300 px-3 py-2">FCR</th>,
                       ])}
                     </tr>
