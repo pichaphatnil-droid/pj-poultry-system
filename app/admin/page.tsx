@@ -191,13 +191,14 @@ const createWeeklyWeightInputs = (
 
 const createEmptyWeightCalculatorInput = (
   house = 1,
+  week = 1,
 ): WeightCalculatorInput => ({
   sampleDate: getTodayThailand(),
   birdsPerWeighing: "50",
   totalBirdsOverride: "",
   basketWeightKg: "0",
   deductionPerBirdG: "10",
-  feedKg: String(DEFAULT_WEEKLY_FEED_KG[house] || 0),
+  feedKg: week === 1 ? String(DEFAULT_WEEKLY_FEED_KG[house] || 0) : "",
   measurements: Object.fromEntries(
     WEIGHING_POSITIONS.map((position) => [position.key, ["", ""]]),
   ),
@@ -206,8 +207,9 @@ const createEmptyWeightCalculatorInput = (
 const createWeightCalculatorInput = (
   session?: WeightMeasurementSession,
   house = 1,
+  week = 1,
 ): WeightCalculatorInput => {
-  if (!session) return createEmptyWeightCalculatorInput(house);
+  if (!session) return createEmptyWeightCalculatorInput(house, week);
 
   const completedReadingCount =
     session.measurements?.flat().filter((value) => value != null).length ?? 0;
@@ -223,7 +225,12 @@ const createWeightCalculatorInput = (
         : "",
     basketWeightKg: String(session.basket_weight_kg ?? 0),
     deductionPerBirdG: String(session.deduction_per_bird_g ?? 10),
-    feedKg: String(session.feed_kg ?? DEFAULT_WEEKLY_FEED_KG[house] ?? 0),
+    feedKg:
+      session.feed_kg != null
+        ? String(session.feed_kg)
+        : week === 1
+          ? String(DEFAULT_WEEKLY_FEED_KG[house] ?? 0)
+          : "",
     measurements: Object.fromEntries(
       WEIGHING_POSITIONS.map((position, index) => [
         position.key,
@@ -336,6 +343,7 @@ export default function AdminDashboard() {
       createWeightCalculatorInput(
         weightSessions[sessionKey],
         weightCalculatorHouse,
+        weightCalculatorWeek,
       ),
     );
   }, [weightCalculatorHouse, weightCalculatorWeek, weightSessions]);
@@ -1042,27 +1050,42 @@ export default function AdminDashboard() {
       0,
       (profile?.initial_count || 0) - cumulativeLoss,
     );
-    const previousFeedKg = Array.from(
+    const previousFeedValues = Array.from(
       { length: Math.max(0, weightCalculatorWeek - 1) },
-      (_, index) =>
-        Number(
-          weightSessions[`${weightCalculatorHouse}-${index + 1}`]?.feed_kg ??
-            DEFAULT_WEEKLY_FEED_KG[weightCalculatorHouse] ??
-            0,
-        ),
-    ).reduce(
-      (sum, value) => sum + (Number.isFinite(value) && value > 0 ? value : 0),
-      0,
+      (_, index) => {
+        const savedFeed = weightSessions[
+          `${weightCalculatorHouse}-${index + 1}`
+        ]?.feed_kg;
+        const value = Number(
+          savedFeed ??
+            (index === 0 ? DEFAULT_WEEKLY_FEED_KG[weightCalculatorHouse] : NaN),
+        );
+        return Number.isFinite(value) && value > 0 ? value : null;
+      },
+    );
+    const hasCompleteFeedHistory = previousFeedValues.every(
+      (value) => value != null,
     );
     const cumulativeFeedKg =
-      Number.isFinite(feedKg) && feedKg > 0 ? previousFeedKg + feedKg : null;
+      hasCompleteFeedHistory && Number.isFinite(feedKg) && feedKg > 0
+        ? previousFeedValues.reduce(
+            (sum, value) => sum + (value ?? 0),
+            feedKg,
+          )
+        : null;
     const feedPerBirdG =
       cumulativeFeedKg != null && remainingChickens > 0
         ? (cumulativeFeedKg * 1000) / remainingChickens
         : null;
+    const cumulativeWeightGainG =
+      adjustedAverageG != null && initialWeight != null
+        ? adjustedAverageG - initialWeight
+        : null;
     const farmFcr =
-      adjustedAverageG != null && adjustedAverageG > 0 && feedPerBirdG != null
-        ? feedPerBirdG / adjustedAverageG
+      cumulativeWeightGainG != null &&
+      cumulativeWeightGainG > 0 &&
+      feedPerBirdG != null
+        ? feedPerBirdG / cumulativeWeightGainG
         : null;
 
     return {
@@ -1091,6 +1114,7 @@ export default function AdminDashboard() {
       cumulativeLoss,
       remainingChickens,
       cumulativeFeedKg,
+      cumulativeWeightGainG,
       feedPerBirdG,
       farmFcr,
       differenceFromStandard:
@@ -1842,22 +1866,27 @@ export default function AdminDashboard() {
       const previousStandardWeight =
         index === 0 ? profile?.initial_weight : standards[index - 1] ?? null;
       const savedSession = weightSessions[`${house}-${index + 1}`];
-      const feedKg = Number(
-        savedSession?.feed_kg ?? DEFAULT_WEEKLY_FEED_KG[house] ?? 0,
+      const feedKgValue = Number(
+        savedSession?.feed_kg ??
+          (index === 0 ? DEFAULT_WEEKLY_FEED_KG[house] : NaN),
       );
-      const cumulativeFeedKg = Array.from(
+      const feedKg =
+        Number.isFinite(feedKgValue) && feedKgValue > 0 ? feedKgValue : null;
+      const cumulativeFeedValues = Array.from(
         { length: index + 1 },
-        (_, weekIndex) =>
-          Number(
+        (_, weekIndex) => {
+          const value = Number(
             weightSessions[`${house}-${weekIndex + 1}`]?.feed_kg ??
-              DEFAULT_WEEKLY_FEED_KG[house] ??
-              0,
-          ),
-      ).reduce(
-        (sum, value) =>
-          sum + (Number.isFinite(value) && value > 0 ? value : 0),
-        0,
+              (weekIndex === 0 ? DEFAULT_WEEKLY_FEED_KG[house] : NaN),
+          );
+          return Number.isFinite(value) && value > 0 ? value : null;
+        },
       );
+      const cumulativeFeedKg = cumulativeFeedValues.every(
+        (value) => value != null,
+      )
+        ? cumulativeFeedValues.reduce((sum, value) => sum + (value ?? 0), 0)
+        : null;
       const cumulativeLoss =
         weeklyLossData?.weeks
           .slice(0, index + 1)
@@ -1867,16 +1896,22 @@ export default function AdminDashboard() {
         (profile?.initial_count || 0) - cumulativeLoss,
       );
       const feedPerBirdG =
-        cumulativeFeedKg > 0 && remainingChickens > 0
+        cumulativeFeedKg != null && cumulativeFeedKg > 0 && remainingChickens > 0
           ? (cumulativeFeedKg * 1000) / remainingChickens
           : null;
       const weightGainG =
         actualWeight != null && previousActualWeight != null
           ? Number(actualWeight) - Number(previousActualWeight)
           : null;
+      const cumulativeWeightGainG =
+        actualWeight != null && profile?.initial_weight != null
+          ? Number(actualWeight) - Number(profile.initial_weight)
+          : null;
       const farmFcr =
-        actualWeight != null && Number(actualWeight) > 0 && feedPerBirdG != null
-          ? feedPerBirdG / Number(actualWeight)
+        cumulativeWeightGainG != null &&
+        cumulativeWeightGainG > 0 &&
+        feedPerBirdG != null
+          ? feedPerBirdG / cumulativeWeightGainG
           : null;
 
       return {
@@ -1894,6 +1929,7 @@ export default function AdminDashboard() {
             : null,
         feedKg,
         cumulativeFeedKg,
+        cumulativeWeightGainG,
         remainingChickens,
         feedPerBirdG,
         farmFcr,
@@ -4154,7 +4190,7 @@ export default function AdminDashboard() {
                     ตารางแสดงการเจริญเติบโต
                   </h3>
                   <p className="mt-1 text-sm text-gray-500">
-                    ADG = (น้ำหนักสัปดาห์ปัจจุบัน − น้ำหนักสัปดาห์ก่อน) ÷ 7 · FCR = อาหารกินสะสมต่อไก่ ÷ น้ำหนักเฉลี่ยปัจจุบัน
+                    ADG = (น้ำหนักสัปดาห์ปัจจุบัน − น้ำหนักสัปดาห์ก่อน) ÷ 7 · FCR = อาหารกินสะสมต่อไก่ ÷ (น้ำหนักเฉลี่ยปัจจุบัน − น้ำหนักแรกเข้า)
                   </p>
                 </div>
                 <button
