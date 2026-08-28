@@ -288,6 +288,7 @@ export default function AdminDashboard() {
   // รุ่นที่กำลังดูอยู่ในแท็บ "ตารางสรุป" / "กราฟสรุป" (อาจเป็นรุ่นที่ปิดไปแล้วก็ได้)
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
   const [selectedHouse, setSelectedHouse] = useState<number | null>(null);
+  const [selectedDailyDate, setSelectedDailyDate] = useState<string | null>(null);
   const [visibleHouseMetrics, setVisibleHouseMetrics] = useState<
     Record<HouseChartMetric, boolean>
   >({ dead: true, culled: true, total: true });
@@ -1697,6 +1698,11 @@ export default function AdminDashboard() {
   }
 
   const dailySummary = calculateDailySummary();
+  const todayDate = getTodayThailand();
+  const visibleDailySummary = dailySummary.slice(-7);
+  const selectedDailySummary = dailySummary.find(
+    (day) => day.date === selectedDailyDate,
+  );
   const houseTotals = calculateHouseTotals(dailySummary);
   const grandTotalDead = Object.values(houseTotals).reduce(
     (sum: number, h: any) => sum + h.dead,
@@ -2650,18 +2656,37 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="space-y-4">
-                {dailySummary.map((day, idx) => (
-                  <details
-                    key={idx}
-                    className="group rounded-2xl border border-gray-200 bg-gray-50 overflow-hidden"
-                    open={idx === dailySummary.length - 1}
+              <div className="space-y-2">
+                {visibleDailySummary.map((day) => {
+                  const isToday = day.date === todayDate;
+                  return (
+                  <button
+                    key={day.date}
+                    type="button"
+                    onClick={() => setSelectedDailyDate(day.date)}
+                    className={`relative w-full overflow-hidden rounded-xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      isToday
+                        ? "border-blue-500 bg-blue-50 shadow-sm"
+                        : "border-gray-200 bg-white hover:border-blue-200"
+                    }`}
                   >
-                    <summary className="cursor-pointer list-none p-4 flex items-center justify-between gap-3 bg-white hover:bg-gray-50 transition">
+                    <span
+                      className={`absolute inset-y-0 left-0 w-1.5 ${
+                        isToday ? "bg-blue-600" : "bg-gray-200"
+                      }`}
+                    />
+                    <div className="flex items-center justify-between gap-3 pl-1">
                       <div>
+                        <div className="flex items-center gap-2">
                         <p className="font-bold text-gray-900">
                           วันที่ {day.dateDisplay}
                         </p>
+                        {isToday && (
+                          <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">
+                            วันนี้
+                          </span>
+                        )}
+                        </div>
                         <p className="text-sm text-gray-500">
                           วันที่ {day.day} ของรุ่น
                         </p>
@@ -2670,19 +2695,61 @@ export default function AdminDashboard() {
                         <span className="px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 font-bold text-sm">
                           รวม {day.grandTotal || 0}
                         </span>
-                        <span className="text-gray-400 group-open:rotate-180 transition">
-                          ⌄
+                        <span className="text-gray-400" aria-hidden="true">
+                          ›
                         </span>
                       </div>
-                    </summary>
+                    </div>
+                  </button>
+                  );
+                })}
+              </div>
 
-                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {dailySummary.length > 7 && (
+                <p className="mt-3 text-center text-xs text-gray-500">
+                  แสดง 7 วันล่าสุด
+                </p>
+              )}
+            </div>
+
+            {selectedDailySummary && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="daily-detail-title"
+                onClick={() => setSelectedDailyDate(null)}
+              >
+                <div
+                  className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl bg-gray-50 shadow-2xl"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 bg-white p-4 md:p-5">
+                    <div>
+                      <h3 id="daily-detail-title" className="text-xl font-bold text-gray-900">
+                        ข้อมูลวันที่ {selectedDailySummary.dateDisplay}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        วันที่ {selectedDailySummary.day} ของรุ่น · รวม {selectedDailySummary.grandTotal || 0}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDailyDate(null)}
+                      className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 text-2xl text-gray-600 transition hover:bg-gray-200"
+                      aria-label="ปิดรายละเอียด"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 md:p-5 xl:grid-cols-3">
                       {[1, 2, 3, 4, 5, 6, 7].map((house) => {
-                        const data = day.houses[house];
+                        const data = selectedDailySummary.houses[house];
                         const record = records.find(
                           (r) =>
                             r.house_number === house &&
-                            r.record_date === day.date,
+                            r.record_date === selectedDailySummary.date,
                         );
                         return (
                           <div
@@ -2758,11 +2825,10 @@ export default function AdminDashboard() {
                           </div>
                         );
                       })}
-                    </div>
-                  </details>
-                ))}
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
               <div className="p-4 md:p-5 border-b border-gray-200 bg-gray-50">
