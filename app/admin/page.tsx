@@ -1699,7 +1699,9 @@ export default function AdminDashboard() {
 
   const dailySummary = calculateDailySummary();
   const todayDate = getTodayThailand();
-  const visibleDailySummary = dailySummary.slice(-7);
+  const calendarStartOffset = dailySummary.length
+    ? new Date(`${dailySummary[0].date}T00:00:00`).getDay()
+    : 0;
   const selectedDailySummary = dailySummary.find(
     (day) => day.date === selectedDailyDate,
   );
@@ -2656,60 +2658,71 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                {visibleDailySummary.map((day) => {
+              <div className="grid grid-cols-7 overflow-hidden rounded-2xl border border-gray-200 bg-gray-200 gap-px">
+                {[
+                  "อา.",
+                  "จ.",
+                  "อ.",
+                  "พ.",
+                  "พฤ.",
+                  "ศ.",
+                  "ส.",
+                ].map((weekday) => (
+                  <div
+                    key={weekday}
+                    className="bg-gray-100 px-1 py-2 text-center text-xs font-bold text-gray-600 md:text-sm"
+                  >
+                    {weekday}
+                  </div>
+                ))}
+
+                {Array.from({ length: calendarStartOffset }).map((_, index) => (
+                  <div key={`empty-${index}`} className="min-h-20 bg-gray-50 md:min-h-28" />
+                ))}
+
+                {dailySummary.map((day) => {
                   const isToday = day.date === todayDate;
                   return (
                   <button
                     key={day.date}
                     type="button"
                     onClick={() => setSelectedDailyDate(day.date)}
-                    className={`relative w-full overflow-hidden rounded-xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    className={`relative min-h-20 w-full p-1.5 text-left transition focus:z-10 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 md:min-h-28 md:p-3 ${
                       isToday
-                        ? "border-blue-500 bg-blue-50 shadow-sm"
-                        : "border-gray-200 bg-white hover:border-blue-200"
+                        ? "bg-blue-100"
+                        : "bg-white hover:bg-blue-50"
                     }`}
                   >
-                    <span
-                      className={`absolute inset-y-0 left-0 w-1.5 ${
-                        isToday ? "bg-blue-600" : "bg-gray-200"
-                      }`}
-                    />
-                    <div className="flex items-center justify-between gap-3 pl-1">
-                      <div>
-                        <div className="flex items-center gap-2">
-                        <p className="font-bold text-gray-900">
-                          วันที่ {day.dateDisplay}
-                        </p>
+                    <div className="flex h-full flex-col">
+                      <div className="flex items-start justify-between gap-1">
+                        <span
+                          className={`flex h-7 min-w-7 items-center justify-center rounded-full px-1 text-sm font-bold md:h-8 md:min-w-8 ${
+                            isToday
+                              ? "bg-blue-600 text-white"
+                              : "text-gray-900"
+                          }`}
+                        >
+                          {Number(day.date.slice(-2))}
+                        </span>
                         {isToday && (
-                          <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">
+                          <span className="hidden rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white md:inline">
                             วันนี้
                           </span>
                         )}
-                        </div>
-                        <p className="text-sm text-gray-500">
+                      </div>
+                      <div className="mt-auto pt-1">
+                        <p className="truncate text-[10px] text-gray-500 md:text-xs">
                           วันที่ {day.day} ของรุ่น
                         </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="px-3 py-1 rounded-full bg-yellow-100 text-yellow-800 font-bold text-sm">
+                        <p className="text-xs font-bold text-yellow-800 md:text-sm">
                           รวม {day.grandTotal || 0}
-                        </span>
-                        <span className="text-gray-400" aria-hidden="true">
-                          ›
-                        </span>
+                        </p>
                       </div>
                     </div>
                   </button>
                   );
                 })}
               </div>
-
-              {dailySummary.length > 7 && (
-                <p className="mt-3 text-center text-xs text-gray-500">
-                  แสดง 7 วันล่าสุด
-                </p>
-              )}
             </div>
 
             {selectedDailySummary && (
