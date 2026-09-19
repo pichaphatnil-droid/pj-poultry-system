@@ -284,6 +284,8 @@ export default function AdminDashboard() {
     useState(false);
   const growthTableExportRef = useRef<HTMLDivElement | null>(null);
   const [exportingGrowthTable, setExportingGrowthTable] = useState(false);
+  const chartSummaryExportRef = useRef<HTMLDivElement | null>(null);
+  const [exportingChartImage, setExportingChartImage] = useState(false);
 
   // รุ่นที่กำลังดูอยู่ในแท็บ "ตารางสรุป" / "กราฟสรุป" (อาจเป็นรุ่นที่ปิดไปแล้วก็ได้)
   const [selectedBatchId, setSelectedBatchId] = useState<string | null>(null);
@@ -1447,6 +1449,67 @@ export default function AdminDashboard() {
         scrollContainer.style.overflowX = previousScrollStyles.overflowX;
       }
       setExportingGrowthTable(false);
+    }
+  };
+
+  const handleExportChartImage = async () => {
+    const element = chartSummaryExportRef.current;
+    if (!element || !viewingBatch) return;
+
+    setExportingChartImage(true);
+
+    const previousStyles = {
+      width: element.style.width,
+      minWidth: element.style.minWidth,
+      maxWidth: element.style.maxWidth,
+      backgroundColor: element.style.backgroundColor,
+    };
+
+    // ขยายกราฟให้กว้างกว่าหน้ากระดาษ A4 มาก เพื่อให้เส้นและวันที่อ่านได้ละเอียด
+    element.style.width = "3000px";
+    element.style.minWidth = "3000px";
+    element.style.maxWidth = "none";
+    element.style.backgroundColor = "#f9fafb";
+
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const exportWidth = Math.ceil(element.scrollWidth);
+      const exportHeight = Math.ceil(element.scrollHeight);
+      const canvas = await html2canvas(element, {
+        backgroundColor: "#f9fafb",
+        scale: 2,
+        useCORS: true,
+        width: exportWidth,
+        height: exportHeight,
+        windowWidth: exportWidth,
+        windowHeight: exportHeight,
+        scrollX: 0,
+        scrollY: 0,
+      });
+
+      const safeBatchName = viewingBatch.batch_name.replace(
+        /[\\/:*?"<>|]/g,
+        "-",
+      );
+      const link = document.createElement("a");
+      link.download = `กราฟสรุป-${safeBatchName}-${getTodayThailand()}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (error) {
+      console.error("Chart image export failed:", error);
+      alert(
+        "ไม่สามารถ Export กราฟเป็นภาพได้ กรุณาติดตั้งแพ็กเกจ html2canvas ก่อน",
+      );
+    } finally {
+      element.style.width = previousStyles.width;
+      element.style.minWidth = previousStyles.minWidth;
+      element.style.maxWidth = previousStyles.maxWidth;
+      element.style.backgroundColor = previousStyles.backgroundColor;
+      setExportingChartImage(false);
     }
   };
 
@@ -3095,7 +3158,15 @@ export default function AdminDashboard() {
                   </span>
                 )}
               </h2>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <button
+                  type="button"
+                  onClick={handleExportChartImage}
+                  disabled={exportingChartImage || recordsLoading}
+                  className="rounded-lg bg-green-600 px-4 py-2 font-bold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {exportingChartImage ? "กำลังสร้างภาพ..." : "Export กราฟเป็น PNG"}
+                </button>
                 <span className="text-sm font-semibold text-blue-900">
                   เลือกรุ่น:
                 </span>
@@ -3114,6 +3185,7 @@ export default function AdminDashboard() {
               </div>
             </div>
 
+            <div ref={chartSummaryExportRef} className="space-y-6 bg-gray-50">
             <div className="bg-white rounded-lg shadow-sm p-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-4">
                 กราฟแสดงแนวโน้มรายวัน (แยกตามเล้า)
@@ -3191,6 +3263,7 @@ export default function AdminDashboard() {
                   <Bar dataKey="คัด" fill="#f97316" />
                 </BarChart>
               </ResponsiveContainer>
+            </div>
             </div>
           </div>
         )}
