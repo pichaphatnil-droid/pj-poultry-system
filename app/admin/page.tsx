@@ -279,6 +279,7 @@ export default function AdminDashboard() {
   const [legacyTableZoom, setLegacyTableZoom] = useState(1);
   const legacyTableExportRef = useRef<HTMLDivElement | null>(null);
   const [exportingLegacyTable, setExportingLegacyTable] = useState(false);
+  const [exportingLegacyExcel, setExportingLegacyExcel] = useState(false);
   const weeklyPerformanceExportRef = useRef<HTMLDivElement | null>(null);
   const [exportingWeeklyPerformance, setExportingWeeklyPerformance] =
     useState(false);
@@ -1295,6 +1296,70 @@ export default function AdminDashboard() {
     } finally {
       element.style.zoom = previousZoom;
       setExportingLegacyTable(false);
+    }
+  };
+
+  const handleExportLegacyTableExcel = async () => {
+    if (!viewingBatch || exportingLegacyExcel) return;
+    setExportingLegacyExcel(true);
+
+    try {
+      const XLSX = await import("xlsx");
+      const summary = calculateDailySummary();
+      const recordMap = new Map(
+        records.map((record) => [`${record.record_date}-${record.house_number}`, record]),
+      );
+      const headers = [
+        "วันที่", "วันที่เลี้ยง", "เล้า", "ตายเช้า", "คัดเช้า",
+        "ตายบ่าย", "คัดบ่าย", "รวมตาย", "รวมคัด", "รวมตาย/คัด",
+        "อุณหภูมิภายนอก (°C)", "อุณหภูมิภายใน (°C)",
+        "ความชื้น (%)", "มิเตอร์น้ำ",
+      ];
+      const rows: (string | number | null)[][] = [headers];
+      const totals = Array(7).fill(0) as number[];
+
+      for (const day of summary) {
+        for (const house of HOUSE_NUMBERS) {
+          const record = recordMap.get(`${day.date}-${house}`);
+          const hasMorning = Boolean(record?.morning_recorded_at);
+          const hasAfternoon = Boolean(record?.afternoon_recorded_at);
+          const morningDead = hasMorning ? (record?.morning_dead ?? 0) : null;
+          const morningCulled = hasMorning ? (record?.morning_culled ?? 0) : null;
+          const afternoonDead = hasAfternoon ? (record?.afternoon_dead ?? 0) : null;
+          const afternoonCulled = hasAfternoon ? (record?.afternoon_culled ?? 0) : null;
+          const dead = hasMorning || hasAfternoon
+            ? (morningDead ?? 0) + (afternoonDead ?? 0) : null;
+          const culled = hasMorning || hasAfternoon
+            ? (morningCulled ?? 0) + (afternoonCulled ?? 0) : null;
+          const total = dead == null ? null : dead + (culled ?? 0);
+
+          const counts = [morningDead, morningCulled, afternoonDead, afternoonCulled, dead, culled, total];
+          counts.forEach((value, index) => { totals[index] += value ?? 0; });
+          rows.push([
+            day.date, day.day, house, ...counts,
+            record?.morning_temp_outside ?? null,
+            record?.morning_temp_inside ?? null,
+            record?.morning_humidity ?? null,
+            record?.morning_water_meter ?? null,
+          ]);
+        }
+      }
+
+      rows.push(["รวมทุกเล้า", "", "", ...totals, "", "", "", ""]);
+      const worksheet = XLSX.utils.aoa_to_sheet(rows);
+      worksheet["!cols"] = headers.map((header, index) => ({
+        wch: index === 0 ? 16 : index >= 10 ? 25 : Math.max(12, header.length + 2),
+      }));
+      worksheet["!autofilter"] = { ref: `A1:N${rows.length - 1}` };
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "ข้อมูลรายวัน");
+      const safeName = viewingBatch.batch_name.replace(/[\\/:*?"<>|]/g, "-");
+      XLSX.writeFile(workbook, `ตารางข้อมูลเดิม-${safeName}-${getTodayThailand()}.xlsx`);
+    } catch (error) {
+      console.error("Excel export failed:", error);
+      alert("ไม่สามารถ Export Excel ได้ กรุณาตรวจสอบว่าติดตั้งแพ็กเกจ xlsx แล้ว (npm install xlsx)");
+    } finally {
+      setExportingLegacyExcel(false);
     }
   };
 
@@ -2946,6 +3011,15 @@ export default function AdminDashboard() {
                         +
                       </button>
                     </div>
+
+                    <button
+                      onClick={handleExportLegacyTableExcel}
+                      disabled={exportingLegacyExcel || recordsLoading}
+                      className="px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold shadow-sm transition"
+                      type="button"
+                    >
+                      {exportingLegacyExcel ? "กำลัง Export Excel..." : "Export Excel (.xlsx)"}
+                    </button>
 
                     <button
                       onClick={handleExportLegacyTableImage}
