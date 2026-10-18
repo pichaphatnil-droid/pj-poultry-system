@@ -1309,55 +1309,118 @@ export default function AdminDashboard() {
       const recordMap = new Map(
         records.map((record) => [`${record.record_date}-${record.house_number}`, record]),
       );
-      const headers = [
-        "วันที่", "วันที่เลี้ยง", "เล้า", "ตายเช้า", "คัดเช้า",
-        "ตายบ่าย", "คัดบ่าย", "รวมตาย", "รวมคัด", "รวมตาย/คัด",
+      const workbook = XLSX.utils.book_new();
+      const columns = [
+        "อายุ (วัน)", "วันที่", "เช้า: ตาย", "เช้า: คัดทิ้ง",
+        "บ่าย: ตาย", "บ่าย: คัดทิ้ง", "รวมตาย/วัน", "รวมคัด/วัน",
+        "รวมสูญเสีย/วัน", "ตายสะสม", "คัดสะสม", "สูญเสียสะสม",
+        "คงเหลือ (ตัว)", "สูญเสียรายวัน (%)", "สูญเสียสะสม (%)",
         "อุณหภูมิภายนอก (°C)", "อุณหภูมิภายใน (°C)",
-        "ความชื้น (%)", "มิเตอร์น้ำ",
+        "ความชื้น (%)", "มิเตอร์น้ำ", "น้ำใช้ (ผลต่างมิเตอร์)",
       ];
-      const rows: (string | number | null)[][] = [headers];
-      const totals = Array(7).fill(0) as number[];
 
-      for (const day of summary) {
-        for (const house of HOUSE_NUMBERS) {
+      for (const house of HOUSE_NUMBERS) {
+        const profile = housePerformanceData[house];
+        const initialCount = profile?.initial_count ?? houseInitialCounts[house] ?? null;
+        const rows: (string | number | null)[][] = [
+          [`ฟาร์ม: ${viewingBatch.batch_name}`, "", "", "", `เล้า ${house}`, "", "", "", `จำนวนเริ่มต้น: ${initialCount ?? "ไม่ระบุ"} ตัว`],
+          ["อายุ", "วันที่", "เช้า", "", "บ่าย", "", "รายวัน", "", "", "ยอดสะสม", "", "", "คงเหลือ", "อัตราสูญเสีย", "", "อุณหภูมิ", "", "ความชื้น", "น้ำ", ""],
+          columns,
+        ];
+        let cumulativeDead = 0;
+        let cumulativeCulled = 0;
+        let previousMeter: number | null = null;
+        let weeklyDead = 0;
+        let weeklyCulled = 0;
+        let weeklyRecorded = false;
+        const weeklyRowIndices: number[] = [];
+
+        for (const [index, day] of summary.entries()) {
           const record = recordMap.get(`${day.date}-${house}`);
-          const hasMorning = Boolean(record?.morning_recorded_at);
-          const hasAfternoon = Boolean(record?.afternoon_recorded_at);
-          const morningDead = hasMorning ? (record?.morning_dead ?? 0) : null;
-          const morningCulled = hasMorning ? (record?.morning_culled ?? 0) : null;
-          const afternoonDead = hasAfternoon ? (record?.afternoon_dead ?? 0) : null;
-          const afternoonCulled = hasAfternoon ? (record?.afternoon_culled ?? 0) : null;
-          const dead = hasMorning || hasAfternoon
-            ? (morningDead ?? 0) + (afternoonDead ?? 0) : null;
-          const culled = hasMorning || hasAfternoon
-            ? (morningCulled ?? 0) + (afternoonCulled ?? 0) : null;
-          const total = dead == null ? null : dead + (culled ?? 0);
-
-          const counts = [morningDead, morningCulled, afternoonDead, afternoonCulled, dead, culled, total];
-          counts.forEach((value, index) => { totals[index] += value ?? 0; });
+          const morning = Boolean(record?.morning_recorded_at);
+          const afternoon = Boolean(record?.afternoon_recorded_at);
+          const hasAny = morning || afternoon;
+          const md = morning ? (record?.morning_dead ?? 0) : null;
+          const mc = morning ? (record?.morning_culled ?? 0) : null;
+          const ad = afternoon ? (record?.afternoon_dead ?? 0) : null;
+          const ac = afternoon ? (record?.afternoon_culled ?? 0) : null;
+          const dead = hasAny ? (md ?? 0) + (ad ?? 0) : null;
+          const culled = hasAny ? (mc ?? 0) + (ac ?? 0) : null;
+          const total = hasAny ? (dead ?? 0) + (culled ?? 0) : null;
+          if (hasAny) {
+            cumulativeDead += dead ?? 0;
+            cumulativeCulled += culled ?? 0;
+            weeklyDead += dead ?? 0;
+            weeklyCulled += culled ?? 0;
+            weeklyRecorded = true;
+          }
+          const cumulative = cumulativeDead + cumulativeCulled;
+          const meter = record?.morning_water_meter ?? null;
+          // มิเตอร์เป็นค่าที่อ่านสะสม จึงแสดงน้ำใช้เฉพาะเมื่อมีค่าก่อนหน้าที่บันทึกไว้
+          // และผลต่างไม่ติดลบ (กรณีมิเตอร์ถูกรีเซ็ตจะเว้นว่าง)
+          const waterUsed = meter != null && previousMeter != null && meter >= previousMeter
+            ? meter - previousMeter : null;
+          if (meter != null) previousMeter = meter;
+          const [year, month, date] = day.date.split("-").map(Number);
           rows.push([
-            day.date, day.day, house, ...counts,
+            day.day, `${date}/${month}/${year + 543}`,
+            md, mc, ad, ac, dead, culled, total,
+            hasAny ? cumulativeDead : null,
+            hasAny ? cumulativeCulled : null,
+            hasAny ? cumulative : null,
+            hasAny && initialCount != null ? initialCount - cumulative : null,
+            total != null && initialCount ? total / initialCount : null,
+            hasAny && initialCount ? cumulative / initialCount : null,
             record?.morning_temp_outside ?? null,
             record?.morning_temp_inside ?? null,
             record?.morning_humidity ?? null,
-            record?.morning_water_meter ?? null,
+            meter, waterUsed,
           ]);
+
+          if ((index + 1) % 7 === 0 || index === summary.length - 1) {
+            weeklyRowIndices.push(rows.length);
+            rows.push([
+              `สัปดาห์ ${Math.floor(index / 7) + 1}`, "รวมรายสัปดาห์", "", "", "", "",
+              weeklyRecorded ? weeklyDead : null,
+              weeklyRecorded ? weeklyCulled : null,
+              weeklyRecorded ? weeklyDead + weeklyCulled : null,
+              "", "", "", "", "", "", "", "", "", "", "",
+            ]);
+            weeklyDead = 0;
+            weeklyCulled = 0;
+            weeklyRecorded = false;
+          }
         }
+
+        const worksheet = XLSX.utils.aoa_to_sheet(rows);
+        worksheet["!merges"] = [
+          { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+          { s: { r: 0, c: 4 }, e: { r: 0, c: 7 } },
+          { s: { r: 0, c: 8 }, e: { r: 0, c: 19 } },
+          ...[[2, 3], [4, 5], [6, 8], [9, 11], [13, 14], [15, 16], [18, 19]].map(
+            ([start, end]) => ({ s: { r: 1, c: start }, e: { r: 1, c: end } }),
+          ),
+        ];
+        worksheet["!cols"] = columns.map((_, index) => ({
+          wch: index === 1 ? 17 : index >= 15 ? 23 : index === 0 ? 15 : 18,
+        }));
+        worksheet["!rows"] = [{ hpt: 26 }, { hpt: 23 }, { hpt: 30 }];
+        worksheet["!freeze"] = { xSplit: 2, ySplit: 3 };
+        for (let row = 3; row < rows.length; row++) {
+          if (weeklyRowIndices.includes(row)) continue;
+          for (const col of [13, 14]) {
+            const address = XLSX.utils.encode_cell({ r: row, c: col });
+            if (worksheet[address]?.t === "n") worksheet[address].z = "0.00%";
+          }
+        }
+        XLSX.utils.book_append_sheet(workbook, worksheet, `เล้า ${house}`);
       }
 
-      rows.push(["รวมทุกเล้า", "", "", ...totals, "", "", "", ""]);
-      const worksheet = XLSX.utils.aoa_to_sheet(rows);
-      worksheet["!cols"] = headers.map((header, index) => ({
-        wch: index === 0 ? 16 : index >= 10 ? 25 : Math.max(12, header.length + 2),
-      }));
-      worksheet["!autofilter"] = { ref: `A1:N${rows.length - 1}` };
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, "ข้อมูลรายวัน");
       const safeName = viewingBatch.batch_name.replace(/[\\/:*?"<>|]/g, "-");
-      XLSX.writeFile(workbook, `ตารางข้อมูลเดิม-${safeName}-${getTodayThailand()}.xlsx`);
+      XLSX.writeFile(workbook, `ข้อมูลรายเล้า-${safeName}-${getTodayThailand()}.xlsx`);
     } catch (error) {
       console.error("Excel export failed:", error);
-      alert("ไม่สามารถ Export Excel ได้ กรุณาตรวจสอบว่าติดตั้งแพ็กเกจ xlsx แล้ว (npm install xlsx)");
+      alert("ไม่สามารถ Export Excel ได้ กรุณาตรวจสอบรายละเอียดใน Console");
     } finally {
       setExportingLegacyExcel(false);
     }
