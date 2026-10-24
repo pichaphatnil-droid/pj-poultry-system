@@ -1311,50 +1311,29 @@ export default function AdminDashboard() {
       );
       const workbook = XLSX.utils.book_new();
       const columns = [
-        "อายุ (วัน)", "วันที่", "เช้า: ตาย", "เช้า: คัดทิ้ง",
-        "บ่าย: ตาย", "บ่าย: คัดทิ้ง", "รวมตาย/วัน", "รวมคัด/วัน",
-        "รวมสูญเสีย/วัน", "ตายสะสม", "คัดสะสม", "สูญเสียสะสม",
-        "คงเหลือ (ตัว)", "สูญเสียรายวัน (%)", "สูญเสียสะสม (%)",
+        "อายุ (วัน)", "วันที่",
+        "เช้า: ตาย", "เช้า: คัดทิ้ง", "",
+        "บ่าย: ตาย", "บ่าย: คัดทิ้ง", "",
         "อุณหภูมิภายนอก (°C)", "อุณหภูมิภายใน (°C)",
         "ความชื้น (%)", "มิเตอร์น้ำ", "น้ำใช้ (ผลต่างมิเตอร์)",
       ];
 
       for (const house of HOUSE_NUMBERS) {
-        const profile = housePerformanceData[house];
-        const initialCount = profile?.initial_count ?? houseInitialCounts[house] ?? null;
         const rows: (string | number | null)[][] = [
-          [`ฟาร์ม: ${viewingBatch.batch_name}`, "", "", "", `เล้า ${house}`, "", "", "", `จำนวนเริ่มต้น: ${initialCount ?? "ไม่ระบุ"} ตัว`],
-          ["อายุ", "วันที่", "เช้า", "", "บ่าย", "", "รายวัน", "", "", "ยอดสะสม", "", "", "คงเหลือ", "อัตราสูญเสีย", "", "อุณหภูมิ", "", "ความชื้น", "น้ำ", ""],
+          [`ฟาร์ม: ${viewingBatch.batch_name}`, "", "", "", "", `เล้า ${house}`],
+          ["อายุ", "วันที่", "เช้า", "", "", "บ่าย", "", "", "อุณหภูมิ", "", "ความชื้น", "น้ำ", ""],
           columns,
         ];
-        let cumulativeDead = 0;
-        let cumulativeCulled = 0;
         let previousMeter: number | null = null;
-        let weeklyDead = 0;
-        let weeklyCulled = 0;
-        let weeklyRecorded = false;
-        const weeklyRowIndices: number[] = [];
 
-        for (const [index, day] of summary.entries()) {
+        for (const day of summary) {
           const record = recordMap.get(`${day.date}-${house}`);
           const morning = Boolean(record?.morning_recorded_at);
           const afternoon = Boolean(record?.afternoon_recorded_at);
-          const hasAny = morning || afternoon;
           const md = morning ? (record?.morning_dead ?? 0) : null;
           const mc = morning ? (record?.morning_culled ?? 0) : null;
           const ad = afternoon ? (record?.afternoon_dead ?? 0) : null;
           const ac = afternoon ? (record?.afternoon_culled ?? 0) : null;
-          const dead = hasAny ? (md ?? 0) + (ad ?? 0) : null;
-          const culled = hasAny ? (mc ?? 0) + (ac ?? 0) : null;
-          const total = hasAny ? (dead ?? 0) + (culled ?? 0) : null;
-          if (hasAny) {
-            cumulativeDead += dead ?? 0;
-            cumulativeCulled += culled ?? 0;
-            weeklyDead += dead ?? 0;
-            weeklyCulled += culled ?? 0;
-            weeklyRecorded = true;
-          }
-          const cumulative = cumulativeDead + cumulativeCulled;
           const meter = record?.morning_water_meter ?? null;
           // มิเตอร์เป็นค่าที่อ่านสะสม จึงแสดงน้ำใช้เฉพาะเมื่อมีค่าก่อนหน้าที่บันทึกไว้
           // และผลต่างไม่ติดลบ (กรณีมิเตอร์ถูกรีเซ็ตจะเว้นว่าง)
@@ -1364,55 +1343,28 @@ export default function AdminDashboard() {
           const [year, month, date] = day.date.split("-").map(Number);
           rows.push([
             day.day, `${date}/${month}/${year + 543}`,
-            md, mc, ad, ac, dead, culled, total,
-            hasAny ? cumulativeDead : null,
-            hasAny ? cumulativeCulled : null,
-            hasAny ? cumulative : null,
-            hasAny && initialCount != null ? initialCount - cumulative : null,
-            total != null && initialCount ? total / initialCount : null,
-            hasAny && initialCount ? cumulative / initialCount : null,
+            md, mc, 0,
+            ad, ac, 0,
             record?.morning_temp_outside ?? null,
             record?.morning_temp_inside ?? null,
             record?.morning_humidity ?? null,
             meter, waterUsed,
           ]);
-
-          if ((index + 1) % 7 === 0 || index === summary.length - 1) {
-            weeklyRowIndices.push(rows.length);
-            rows.push([
-              `สัปดาห์ ${Math.floor(index / 7) + 1}`, "รวมรายสัปดาห์", "", "", "", "",
-              weeklyRecorded ? weeklyDead : null,
-              weeklyRecorded ? weeklyCulled : null,
-              weeklyRecorded ? weeklyDead + weeklyCulled : null,
-              "", "", "", "", "", "", "", "", "", "", "",
-            ]);
-            weeklyDead = 0;
-            weeklyCulled = 0;
-            weeklyRecorded = false;
-          }
         }
 
         const worksheet = XLSX.utils.aoa_to_sheet(rows);
         worksheet["!merges"] = [
-          { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
-          { s: { r: 0, c: 4 }, e: { r: 0, c: 7 } },
-          { s: { r: 0, c: 8 }, e: { r: 0, c: 19 } },
-          ...[[2, 3], [4, 5], [6, 8], [9, 11], [13, 14], [15, 16], [18, 19]].map(
+          { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+          { s: { r: 0, c: 5 }, e: { r: 0, c: 12 } },
+          ...[[2, 4], [5, 7], [8, 9], [11, 12]].map(
             ([start, end]) => ({ s: { r: 1, c: start }, e: { r: 1, c: end } }),
           ),
         ];
         worksheet["!cols"] = columns.map((_, index) => ({
-          wch: index === 1 ? 17 : index >= 15 ? 23 : index === 0 ? 15 : 18,
+          wch: index === 0 ? 15 : index === 1 ? 17 : index >= 8 ? 23 : 18,
         }));
         worksheet["!rows"] = [{ hpt: 26 }, { hpt: 23 }, { hpt: 30 }];
         worksheet["!freeze"] = { xSplit: 2, ySplit: 3 };
-        for (let row = 3; row < rows.length; row++) {
-          if (weeklyRowIndices.includes(row)) continue;
-          for (const col of [13, 14]) {
-            const address = XLSX.utils.encode_cell({ r: row, c: col });
-            if (worksheet[address]?.t === "n") worksheet[address].z = "0.00%";
-          }
-        }
         XLSX.utils.book_append_sheet(workbook, worksheet, `เล้า ${house}`);
       }
 
