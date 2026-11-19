@@ -66,8 +66,13 @@ SESSION_SECRET=ข้อความสุ่มยาวอย่างน้�
 
 สร้าง `SESSION_SECRET` ได้ด้วย `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
 
-#### 2.4 รัน migration ระบบ login
-รันไฟล์ `supabase/migrations/20261119_secure_login.sql` ใน SQL Editor หนึ่งครั้ง
+#### 2.4 ฐานข้อมูล
+- **ตั้งระบบใหม่ (project ว่าง):** รัน `supabase-schema.sql` ไฟล์เดียวจบ
+- **ฐานข้อมูลที่ใช้งานอยู่แล้ว:** รันไฟล์ใน `supabase/migrations/` ที่ยังไม่เคยรัน ตามลำดับชื่อไฟล์
+  - `20261119_secure_login.sql` — ระบบ login แบบปลอดภัย
+  - `20261119_house_pins.sql` — รหัสประจำเล้า
+  - `20261120_farm_settings.sql` — หน้าตั้งค่าฟาร์ม
+  - `20261120_lock_down_tables.sql` — ปิดสิทธิ์กุญแจสาธารณะ (**รันหลัง deploy โค้ดใหม่เสร็จแล้วเท่านั้น**)
 
 ### 3. รันโปรเจค
 
@@ -187,7 +192,7 @@ git push -u origin main
 
 ## ⚠️ ข้อควรระวัง
 
-1. **Security:** รหัสผ่านตรวจที่เซิร์ฟเวอร์และเก็บแบบ hash (scrypt) แล้ว แต่ตารางข้อมูลฟาร์ม (`daily_records`, `batches` ฯลฯ) ยังเขียนผ่าน anon key จากหน้าเว็บโดยตรง ขั้นต่อไปควรย้ายการบันทึกเหล่านี้ไปทำผ่าน API ด้วย
+1. **Security:** หน้าเว็บไม่ต่อฐานข้อมูลตรงแล้ว ทุกการอ่าน/เขียนผ่าน API ฝั่งเซิร์ฟเวอร์ (`app/api/*`) ซึ่งตรวจการ login ทุกครั้ง พนักงานบันทึกได้เฉพาะเล้าของตัวเอง `SUPABASE_SERVICE_ROLE_KEY` ต้องเก็บเป็นความลับเสมอ
 2. **RLS Policies:** ตรวจสอบว่า RLS policies ทำงานถูกต้อง
 3. **Backup:** สำรองข้อมูลใน Supabase เป็นประจำ
 

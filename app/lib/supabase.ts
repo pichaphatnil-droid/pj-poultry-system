@@ -1,10 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
 import type { User } from '../types';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// หมายเหตุ: หน้าเว็บไม่ต่อฐานข้อมูลตรงอีกแล้ว ทุกอย่างผ่าน API ฝั่งเซิร์ฟเวอร์ (app/api/*)
 
 const USER_STORAGE_KEY = 'user';
 

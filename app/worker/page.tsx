@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { refreshCurrentUser, signOut, supabase } from '../lib/supabase';
+import { refreshCurrentUser, signOut } from '../lib/supabase';
 import type { User, Batch, DailyRecord } from '../types';
-import { getTodayThailand, getNowThailand } from '../lib/dateUtils';
+import { getTodayThailand } from '../lib/dateUtils';
 
 type Lang = 'th' | 'lo';
 
@@ -119,7 +119,8 @@ export default function WorkerDashboard() {
 
   const loadActiveBatch = async (currentUser: User) => {
     try {
-      const { data: batch } = await supabase.from('batches').select('*').eq('is_active', true).single();
+      const res = await fetch('/api/worker/record', { cache: 'no-store' });
+      const { batch } = await res.json().catch(() => ({ batch: null }));
       if (batch) {
         setActiveBatch(batch);
       }
@@ -134,11 +135,8 @@ export default function WorkerDashboard() {
     if (!user || !activeBatch) return;
 
     try {
-      const { data: record } = await supabase.from('daily_records').select('*')
-        .eq('batch_id', activeBatch.id)
-        .eq('house_number', user.house_number!)
-        .eq('record_date', date)
-        .single();
+      const res = await fetch(`/api/worker/record?date=${encodeURIComponent(date)}`, { cache: 'no-store' });
+      const { record } = await res.json().catch(() => ({ record: null }));
 
       if (record) {
         setTodayRecord(record);
@@ -180,41 +178,30 @@ export default function WorkerDashboard() {
     if (!user || !activeBatch) return;
     setSaving(true);
     try {
-      const now = getNowThailand();
-      const recordData: any = {
-        batch_id: activeBatch.id,
-        house_number: user.house_number!,
-        record_date: selectedDate,
-      };
-
-      if (activeTab === 'morning') {
-        recordData.morning_dead = parseInt(morningDead) || 0;
-        recordData.morning_culled = parseInt(morningCulled) || 0;
-        recordData.morning_temp_outside = parseFloat(morningTempOutside) || null;
-        recordData.morning_temp_inside = parseFloat(morningTempInside) || null;
-        recordData.morning_humidity = parseFloat(morningHumidity) || null;
-        recordData.morning_water_meter = parseFloat(morningWaterMeter) || null;
-        recordData.morning_recorded_by = user.id;
-        recordData.morning_recorded_at = now;
-      } else {
-        recordData.afternoon_dead = parseInt(afternoonDead) || 0;
-        recordData.afternoon_culled = parseInt(afternoonCulled) || 0;
-        recordData.afternoon_recorded_by = user.id;
-        recordData.afternoon_recorded_at = now;
-      }
-
-      const { data, error } = await supabase.from('daily_records')
-        .upsert(recordData, { onConflict: 'batch_id,house_number,record_date' }).select().single();
-      if (error) throw error;
-
-      // บันทึก activity log
-      await supabase.from('activity_logs').insert({
-        user_id: user.id,
-        action: activeTab === 'morning' ? 'RECORD_MORNING' : 'RECORD_AFTERNOON',
-        description: `${t.activityDescPrefix}${activeTab === 'morning' ? t.morning : t.afternoon} ${t.activityHouse} ${user.house_number} ${t.activityDate} ${selectedDate}`,
-        record_date: selectedDate,
-        house_number: user.house_number
+      const isMorning = activeTab === 'morning';
+      const res = await fetch('/api/worker/record', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          date: selectedDate,
+          period: activeTab,
+          values: isMorning
+            ? {
+                dead: morningDead,
+                culled: morningCulled,
+                tempOutside: morningTempOutside,
+                tempInside: morningTempInside,
+                humidity: morningHumidity,
+                waterMeter: morningWaterMeter,
+              }
+            : { dead: afternoonDead, culled: afternoonCulled },
+          // ข้อความในประวัติการทำรายการ (ตามภาษาที่เลือก)
+          description: `${t.activityDescPrefix}${isMorning ? t.morning : t.afternoon} ${t.activityHouse} ${user.house_number} ${t.activityDate} ${selectedDate}`,
+        }),
       });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result.error || 'บันทึกไม่สำเร็จ');
+      const data = result.record;
 
       setTodayRecord(data);
       setShowSuccess(true);
