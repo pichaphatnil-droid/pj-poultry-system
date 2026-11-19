@@ -3,7 +3,9 @@ import { getSupabaseAdmin, SAFE_USER_COLUMNS } from "../../../lib/server/supabas
 import { hashPassword, PIN_PATTERN } from "../../../lib/server/password";
 import { requireAdmin } from "../../../lib/server/auth";
 
-const USERNAME_PATTERN = /^[a-zA-Z0-9_.-]{3,30}$/;
+// ภาษาไทย อังกฤษ ตัวเลข และ _ . - ได้ (ห้ามเว้นวรรค)
+const USERNAME_PATTERN = /^[\p{L}\p{M}\p{N}_.-]{2,30}$/u;
+const USERNAME_ERROR = "ชื่อผู้ใช้ต้องยาว 2–30 ตัว และห้ามเว้นวรรค";
 
 const ensureActiveAdmin = async (request: NextRequest) => {
   const session = await requireAdmin(request);
@@ -40,7 +42,7 @@ export async function POST(request: NextRequest) {
 
   if (!USERNAME_PATTERN.test(username)) {
     return NextResponse.json(
-      { error: "ชื่อผู้ใช้ต้องเป็นภาษาอังกฤษหรือตัวเลข 3–30 ตัว (ห้ามเว้นวรรค)" },
+      { error: USERNAME_ERROR },
       { status: 400 },
     );
   }
@@ -98,6 +100,14 @@ export async function PATCH(request: NextRequest) {
     updates.locked_until = null;
   }
 
+  if (body.username !== undefined) {
+    const username = String(body.username).trim();
+    if (!USERNAME_PATTERN.test(username)) {
+      return NextResponse.json({ error: USERNAME_ERROR }, { status: 400 });
+    }
+    updates.username = username;
+  }
+
   if (body.full_name !== undefined) {
     const fullName = String(body.full_name).trim();
     if (!fullName) {
@@ -136,7 +146,9 @@ export async function PATCH(request: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: "บันทึกไม่สำเร็จ" }, { status: 400 });
+    const message =
+      error.code === "23505" ? "ชื่อผู้ใช้นี้มีคนใช้แล้ว" : "บันทึกไม่สำเร็จ";
+    return NextResponse.json({ error: message }, { status: 400 });
   }
   return NextResponse.json({ user: data });
 }

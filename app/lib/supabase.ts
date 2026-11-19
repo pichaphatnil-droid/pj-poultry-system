@@ -35,6 +35,33 @@ export const signIn = async (username: string, password: string) => {
   }
 };
 
+// พนักงาน: เลือกเล้า + ใส่รหัสเล้า
+// ถ้าเล้านั้นมีพนักงานหลายคน จะได้ choose กลับมาให้เลือกชื่อ แล้วเรียกซ้ำพร้อม userId
+export const signInHouse = async (
+  house: number,
+  pin: string,
+  userId?: string,
+): Promise<{
+  user: User | null;
+  choose: { id: string; full_name: string }[] | null;
+  error: string | null;
+}> => {
+  try {
+    const res = await fetch('/api/login/house', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ house, pin, userId }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'รหัสไม่ถูกต้อง');
+    if (data.choose) return { user: null, choose: data.choose, error: null };
+    storeUser(data.user);
+    return { user: data.user as User, choose: null, error: null };
+  } catch (error: any) {
+    return { user: null, choose: null, error: error.message as string };
+  }
+};
+
 export const signOut = async () => {
   storeUser(null);
   try {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { User } from "../types";
 
 interface UsersManagerProps {
@@ -37,9 +37,33 @@ export default function UsersManager({
   const [resetUserId, setResetUserId] = useState<string | null>(null);
   const [resetPin, setResetPin] = useState("");
   const [editUserId, setEditUserId] = useState<string | null>(null);
+  const [editUsername, setEditUsername] = useState("");
   const [editFullName, setEditFullName] = useState("");
   const [editHouse, setEditHouse] = useState("");
   const [busy, setBusy] = useState(false);
+  const [housePinStatus, setHousePinStatus] = useState<Record<number, boolean>>({});
+  const [housePinError, setHousePinError] = useState("");
+  const [editPinHouse, setEditPinHouse] = useState<number | null>(null);
+  const [housePinInput, setHousePinInput] = useState("");
+
+  const loadHousePins = async () => {
+    const res = await fetch("/api/admin/house-pins", { cache: "no-store" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setHousePinError(data.error || "โหลดรหัสเล้าไม่สำเร็จ");
+      return;
+    }
+    setHousePinError("");
+    setHousePinStatus(
+      Object.fromEntries(
+        (data.houses || []).map((h: { house_number: number }) => [h.house_number, true]),
+      ),
+    );
+  };
+
+  useEffect(() => {
+    loadHousePins();
+  }, []);
   const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(
     null,
   );
@@ -81,9 +105,24 @@ export default function UsersManager({
       setResetPin("");
     }, `ตั้ง PIN ใหม่ให้ ${u.full_name} แล้ว — PIN ใหม่: ${resetPin}`);
 
+  const handleSaveHousePin = (house: number) =>
+    run(async () => {
+      const res = await fetch("/api/admin/house-pins", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ house, pin: housePinInput }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "บันทึกไม่สำเร็จ");
+      setEditPinHouse(null);
+      setHousePinInput("");
+      await loadHousePins();
+    }, `ตั้งรหัสเล้า ${house} เป็น ${housePinInput} แล้ว`);
+
   const startEdit = (u: User) => {
     setResetUserId(null);
     setEditUserId(u.id);
+    setEditUsername(u.username);
     setEditFullName(u.full_name);
     setEditHouse(u.house_number ? String(u.house_number) : "");
     setMessage(null);
@@ -93,11 +132,14 @@ export default function UsersManager({
     run(async () => {
       await callUsersApi("PATCH", {
         id: u.id,
+        ...(editUsername !== u.username ? { username: editUsername } : {}),
         full_name: editFullName,
         ...(u.role === "worker" ? { house_number: editHouse } : {}),
       });
       setEditUserId(null);
-    }, `บันทึกข้อมูล ${editFullName} แล้ว`);
+    }, editUsername !== u.username
+      ? `บันทึกแล้ว — แจ้ง ${editFullName} ว่าต่อไปให้ใช้ชื่อผู้ใช้ "${editUsername}" (รหัสเดิม)`
+      : `บันทึกข้อมูล ${editFullName} แล้ว`);
 
   const handleToggleActive = (u: User) => {
     if (
@@ -124,8 +166,8 @@ export default function UsersManager({
             พนักงานลืมรหัส? กด &quot;ตั้ง PIN ใหม่&quot; แล้วบอก PIN ใหม่ให้พนักงาน
           </p>
           <p className="text-sm text-gray-500">
-            เปลี่ยนคนดูแลเล้า? กด &quot;ระงับ&quot; บัญชีคนเก่า แล้ว &quot;+ เพิ่มพนักงาน&quot; ให้คนใหม่
-            (ประวัติการบันทึกของคนเก่าจะยังอยู่ครบ)
+            คนงานสลับเล้า? กด &quot;แก้ไข&quot; แล้วเปลี่ยนเล้า · คนใหม่มาแทน? &quot;ระงับ&quot; คนเก่า แล้ว
+            &quot;+ เพิ่มพนักงาน&quot; (ประวัติของคนเก่ายังอยู่ครบ)
           </p>
         </div>
         <button
@@ -152,13 +194,13 @@ export default function UsersManager({
         <div className="bg-white rounded-lg shadow-sm p-5 grid gap-4 md:grid-cols-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              ชื่อผู้ใช้ (ภาษาอังกฤษ)
+              ชื่อผู้ใช้ (ใช้ตอน login)
             </label>
             <input
               value={newUsername}
               onChange={(e) => setNewUsername(e.target.value.replace(/\s/g, ""))}
               className={inputClass}
-              placeholder="เช่น somchai"
+              placeholder="เช่น บอล"
               autoCapitalize="none"
             />
           </div>
@@ -211,6 +253,75 @@ export default function UsersManager({
         </div>
       )}
 
+      <div className="bg-white rounded-lg shadow-sm p-5">
+        <h3 className="text-lg font-semibold text-gray-800">รหัสประจำเล้า</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          พนักงานเข้าระบบโดยแตะเลือกเล้า แล้วใส่รหัสของเล้านั้น ระบบจะเข้าเป็นพนักงานที่ประจำเล้านั้นอยู่
+          — สลับเล้ากันแค่กด &quot;แก้ไข&quot; เปลี่ยนเล้าในตารางด้านล่าง ไม่ต้องเปลี่ยนรหัส
+        </p>
+        {housePinError && (
+          <p className="mb-3 text-sm text-red-600">{housePinError}</p>
+        )}
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {HOUSES.map((h) => {
+            const staff = users
+              .filter((u) => u.role === "worker" && u.is_active && u.house_number === h)
+              .map((u) => u.full_name);
+            return (
+              <div key={h} className="rounded-lg border border-gray-200 p-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-gray-800">เล้า {h}</span>
+                  {housePinStatus[h] ? (
+                    <span className="text-xs font-semibold text-green-700">ตั้งรหัสแล้ว</span>
+                  ) : (
+                    <span className="text-xs text-amber-700">ใช้รหัสเดิมของพนักงาน</span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-500 truncate">
+                  {staff.length ? staff.join(", ") : "ยังไม่มีพนักงาน"}
+                </p>
+                {editPinHouse === h ? (
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      value={housePinInput}
+                      onChange={(e) => setHousePinInput(onlyDigits(e.target.value))}
+                      className="w-24 rounded-lg border border-gray-300 px-2 py-1 tracking-widest"
+                      inputMode="numeric"
+                      placeholder="รหัส"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => handleSaveHousePin(h)}
+                      disabled={busy || housePinInput.length < 4}
+                      className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm font-semibold disabled:opacity-50"
+                    >
+                      บันทึก
+                    </button>
+                    <button
+                      onClick={() => setEditPinHouse(null)}
+                      className="px-2 py-1 text-sm text-gray-600"
+                    >
+                      ยกเลิก
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setEditPinHouse(h);
+                      setHousePinInput("");
+                      setMessage(null);
+                    }}
+                    className="mt-2 px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg text-sm font-semibold"
+                  >
+                    {housePinStatus[h] ? "เปลี่ยนรหัส" : "ตั้งรหัสเล้า"}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
@@ -229,7 +340,16 @@ export default function UsersManager({
             {users.map((u) => (
               <tr key={u.id}>
                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                  {u.username}
+                  {editUserId === u.id ? (
+                    <input
+                      value={editUsername}
+                      onChange={(e) => setEditUsername(e.target.value.replace(/\s/g, ""))}
+                      className="w-32 rounded-lg border border-gray-300 px-2 py-1"
+                      autoCapitalize="none"
+                    />
+                  ) : (
+                    u.username
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {editUserId === u.id ? (
@@ -237,7 +357,6 @@ export default function UsersManager({
                       value={editFullName}
                       onChange={(e) => setEditFullName(e.target.value)}
                       className="w-48 rounded-lg border border-gray-300 px-2 py-1"
-                      autoFocus
                     />
                   ) : (
                     u.full_name
@@ -279,7 +398,7 @@ export default function UsersManager({
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleSaveEdit(u)}
-                        disabled={busy || !editFullName.trim()}
+                        disabled={busy || !editFullName.trim() || editUsername.length < 2}
                         className="px-3 py-1 bg-blue-600 text-white rounded-lg font-semibold disabled:opacity-50"
                       >
                         บันทึก

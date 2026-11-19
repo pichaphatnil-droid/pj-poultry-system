@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { refreshCurrentUser, signIn } from './lib/supabase';
+import HouseLogin from './components/HouseLogin';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -10,6 +11,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // พนักงานเลือกเล้า + รหัส / แอดมินพิมพ์ชื่อผู้ใช้ + รหัสผ่าน
+  const [mode, setMode] = useState<'house' | 'admin'>('house');
 
   // ถ้าเคย login ไว้แล้วบนเครื่องนี้ พาเข้าหน้าของตัวเองเลย ไม่ต้องกรอกรหัสซ้ำ
   useEffect(() => {
@@ -71,10 +74,32 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Login Card */}
+        {mode === 'house' && (
+          <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8 border-2 border-green-100 fade-in">
+            <HouseLogin
+              onSuccess={(user) =>
+                router.push(user.role === 'admin' ? '/admin' : '/worker')
+              }
+            />
+          </div>
+        )}
+
+        {mode === 'house' && (
+          <div className="text-center mt-4">
+            <button
+              onClick={() => setMode('admin')}
+              className="text-sm text-gray-500 underline"
+            >
+              เข้าสู่ระบบแอดมิน
+            </button>
+          </div>
+        )}
+
+        {/* Login Card (แอดมิน) */}
+        {mode === 'admin' && (
         <div className="bg-white rounded-3xl shadow-2xl p-6 md:p-8 border-2 border-green-100 fade-in">
           <h2 className="text-2xl md:text-3xl font-bold text-gray-800 mb-6 text-center">
-            เข้าสู่ระบบ
+            เข้าสู่ระบบแอดมิน
           </h2>
 
           {error && (
@@ -141,7 +166,18 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+
+          <button
+            onClick={() => {
+              setMode('house');
+              setError('');
+            }}
+            className="mt-6 w-full py-2 text-base text-gray-600"
+          >
+            ← กลับไปหน้าเลือกเล้า
+          </button>
         </div>
+        )}
 
         {/* Footer */}
         <div className="text-center mt-8">
