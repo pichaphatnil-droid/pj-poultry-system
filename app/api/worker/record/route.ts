@@ -14,20 +14,17 @@ const loadContext = async (request: NextRequest) => {
   if (!session) return { error: fail("กรุณาเข้าสู่ระบบใหม่", 401) };
 
   const supabase = getSupabaseAdmin();
-  const { data: user } = await supabase
-    .from("users")
-    .select("id, role, house_number, is_active")
-    .eq("id", session.uid)
-    .maybeSingle();
+  const [{ data: user }, { data: batch }] = await Promise.all([
+    supabase
+      .from("users")
+      .select("id, role, house_number, is_active")
+      .eq("id", session.uid)
+      .maybeSingle(),
+    supabase.from("batches").select("*").eq("is_active", true).maybeSingle(),
+  ]);
   if (!user || !user.is_active || user.role !== "worker" || !user.house_number) {
     return { error: fail("กรุณาเข้าสู่ระบบใหม่", 401) };
   }
-
-  const { data: batch } = await supabase
-    .from("batches")
-    .select("*")
-    .eq("is_active", true)
-    .maybeSingle();
 
   return { supabase, user, batch };
 };

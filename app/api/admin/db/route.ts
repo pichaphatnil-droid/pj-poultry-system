@@ -20,6 +20,10 @@ const ACTIONS = new Set(["select", "insert", "update", "upsert", "delete"]);
 const COLUMN_NAME = /^[a-z_][a-z0-9_]*$/;
 const SECRET_COLUMNS = /password_hash|pin_hash|failed_attempts|locked_until/;
 
+// จำผลการเช็กสิทธิ์แอดมินไว้ 60 วินาที (ลดการถามฐานข้อมูลซ้ำทุกคำขอ)
+const ADMIN_CHECK_TTL_MS = 60_000;
+const verifiedAdmins = new Map<string, number>();
+
 const fail = (message: string, status = 400) =>
   NextResponse.json({ data: null, error: { message } }, { status });
 
@@ -34,13 +38,17 @@ export async function POST(request: NextRequest) {
     return fail(error.message, 500);
   }
 
-  const { data: admin } = await supabase
-    .from("users")
-    .select("role, is_active")
-    .eq("id", session.uid)
-    .maybeSingle();
-  if (!admin || admin.role !== "admin" || !admin.is_active) {
-    return fail("ไม่มีสิทธิ์ทำรายการนี้ กรุณาเข้าสู่ระบบใหม่", 403);
+  if ((verifiedAdmins.get(session.uid) ?? 0) < Date.now()) {
+    const { data: admin } = await supabase
+      .from("users")
+      .select("role, is_active")
+      .eq("id", session.uid)
+      .maybeSingle();
+    if (!admin || admin.role !== "admin" || !admin.is_active) {
+      verifiedAdmins.delete(session.uid);
+      return fail("ไม่มีสิทธิ์ทำรายการนี้ กรุณาเข้าสู่ระบบใหม่", 403);
+    }
+    verifiedAdmins.set(session.uid, Date.now() + ADMIN_CHECK_TTL_MS);
   }
 
   const body = await request.json().catch(() => null);

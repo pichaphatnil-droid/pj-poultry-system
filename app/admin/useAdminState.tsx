@@ -137,15 +137,23 @@ export function useAdminState() {
 
   const loadData = async () => {
     try {
-      const { data: settingsRows } = await adminDb
-        .from("farm_settings")
-        .select("data")
-        .eq("id", 1);
-      setFarmSettings(normalizeFarmSettings(settingsRows?.[0]?.data));
+      // ผู้ใช้ + ประวัติ ไม่ขึ้นกับรุ่น → เริ่มโหลดพร้อมกันไปเลย
+      const usersAndLogs = Promise.all([
+        loadUsers(),
+        adminDb
+          .from("activity_logs")
+          .select("*, users(full_name, house_number)")
+          .order("created_at", { ascending: false })
+          .limit(100)
+          .then(({ data: logsData }) => setActivityLogs(logsData || [])),
+      ]);
 
-      const { error: scheduledCloseError } = await adminDb.rpc(
-        "close_scheduled_batches",
-      );
+      const [{ data: settingsRows }, { error: scheduledCloseError }] =
+        await Promise.all([
+          adminDb.from("farm_settings").select("data").eq("id", 1),
+          adminDb.rpc("close_scheduled_batches"),
+        ]);
+      setFarmSettings(normalizeFarmSettings(settingsRows?.[0]?.data));
 
       if (scheduledCloseError) {
         console.warn("Scheduled batch close check failed:", scheduledCloseError);
@@ -228,14 +236,7 @@ export function useAdminState() {
         }
       }
 
-      await loadUsers();
-
-      const { data: logsData } = await adminDb
-        .from("activity_logs")
-        .select("*, users(full_name, house_number)")
-        .order("created_at", { ascending: false })
-        .limit(100);
-      setActivityLogs(logsData || []);
+      await usersAndLogs;
     } catch (error) {
       console.error("Error loading data:", error);
     } finally {
