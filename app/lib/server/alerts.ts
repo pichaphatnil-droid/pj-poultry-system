@@ -130,13 +130,22 @@ export const buildAlertMessage = (
 
 export const lineConfigured = () => Boolean(process.env.LINE_CHANNEL_ACCESS_TOKEN);
 
-export const linePush = async (to: string, text: string) => {
+export const linePush = async (to: string, text: string, mentionAll = false) => {
   const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
   if (!token) return { ok: false, error: "ยังไม่ได้ตั้งค่า LINE_CHANNEL_ACCESS_TOKEN" };
+  const content = text.replace(/[{}]/g, "").slice(0, 4800);
+  // textV2 + mentionee "all" = แท็ก @All ทั้งกลุ่ม
+  const message = mentionAll
+    ? {
+        type: "textV2",
+        text: `{everyone}\n${content}`,
+        substitution: { everyone: { type: "mention", mentionee: { type: "all" } } },
+      }
+    : { type: "text", text: content };
   const res = await fetch("https://api.line.me/v2/bot/message/push", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ to, messages: [{ type: "text", text: text.slice(0, 4900) }] }),
+    body: JSON.stringify({ to, messages: [message] }),
   });
   if (res.ok) return { ok: true as const };
   const body = await res.text().catch(() => "");
@@ -163,15 +172,16 @@ export const lineGet = async (path: string) => {
 };
 
 // ส่งข้อความถึงผู้รับทุกคนที่แอดมินเปิดใช้งานไว้
-export const sendToRecipients = async (supabase: any, text: string) => {
+// mentionAll: แท็ก @All เฉพาะผู้รับที่เป็นกลุ่ม (แชทส่วนตัวไม่มี @All)
+export const sendToRecipients = async (supabase: any, text: string, mentionAll = false) => {
   const { data: recipients } = await supabase
     .from("line_recipients")
-    .select("id, name")
+    .select("id, name, kind")
     .eq("enabled", true);
   let sent = 0;
   const errors: string[] = [];
   for (const r of recipients || []) {
-    const result = await linePush(r.id, text);
+    const result = await linePush(r.id, text, mentionAll && r.kind !== "user");
     if (result.ok) sent += 1;
     else errors.push(`${r.name || r.id}: ${result.error}`);
   }

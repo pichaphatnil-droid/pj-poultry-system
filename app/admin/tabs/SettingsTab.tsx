@@ -285,6 +285,16 @@ export default function SettingsTab() {
             </div>
           ))}
         </div>
+        <label className={`flex items-center gap-2 text-sm text-gray-700 ${form.alerts.enabled ? "" : "opacity-50"}`}>
+          <input
+            type="checkbox"
+            checked={form.alerts.mentionAll}
+            disabled={!form.alerts.enabled}
+            onChange={(e) => setAlert("mentionAll", e.target.checked)}
+            className="h-4 w-4"
+          />
+          แท็ก <b>@All</b> ทุกคนในกลุ่ม เมื่อส่งเข้ากลุ่ม LINE
+        </label>
         <p className="text-xs text-gray-500">
           เปิด/ปิด และเวลา มีผลหลังกด &quot;บันทึก&quot; ด้านล่าง · ระบบเช็กทุก 15 นาที จึงอาจช้ากว่าเวลาที่ตั้งได้ไม่เกิน 15 นาที
         </p>

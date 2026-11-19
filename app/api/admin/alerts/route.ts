@@ -6,6 +6,7 @@ import {
   buildAlertMessage,
   findMissingHouses,
   lineConfigured,
+  loadFarmSettings,
   PERIOD_LABEL,
   sendToRecipients,
 } from "../../../lib/server/alerts";
@@ -66,7 +67,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const delivery = await sendToRecipients(supabase, lines.join("\n\n"));
+  const { alerts } = await loadFarmSettings(supabase);
+  const delivery = await sendToRecipients(supabase, lines.join("\n\n"), alerts.mentionAll);
   if (delivery.recipients === 0) {
     return NextResponse.json({ error: "ยังไม่มีผู้รับที่เปิดใช้งาน" }, { status: 400 });
   }

@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
       const delivery = await sendToRecipients(
         supabase,
         buildAlertMessage(now.date, period, batchName, missing),
+        alerts.mentionAll,
       );
       await supabase
         .from("alert_log")

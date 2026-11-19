@@ -21,6 +21,7 @@ export interface AlertSettings {
   morningTime: string; // "HH:MM" เวลาไทย — ถึงเวลานี้แล้วเล้าไหนยังไม่บันทึกช่วงเช้า จะแจ้งเตือน
   afternoonEnabled: boolean;
   afternoonTime: string;
+  mentionAll: boolean; // แท็ก @All เมื่อส่งเข้ากลุ่ม LINE
 }
 
 export interface FarmSettings {
@@ -56,6 +57,7 @@ export const DEFAULT_FARM_SETTINGS: FarmSettings = {
     morningTime: "10:00",
     afternoonEnabled: true,
     afternoonTime: "17:00",
+    mentionAll: true,
   },
 };
 
@@ -75,6 +77,7 @@ const normalizeAlerts = (raw: unknown): AlertSettings => {
     morningTime: time(a.morningTime, d.morningTime),
     afternoonEnabled: bool(a.afternoonEnabled, d.afternoonEnabled),
     afternoonTime: time(a.afternoonTime, d.afternoonTime),
+    mentionAll: bool(a.mentionAll, d.mentionAll),
   };
 };
 
