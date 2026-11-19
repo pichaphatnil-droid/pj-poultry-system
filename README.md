@@ -60,7 +60,14 @@ cp .env.local.example .env.local
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key   # ฝั่งเซิร์ฟเวอร์เท่านั้น
+SESSION_SECRET=ข้อความสุ่มยาวอย่างน้อย 32 ตัวอักษร
 ```
+
+สร้าง `SESSION_SECRET` ได้ด้วย `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+
+#### 2.4 รัน migration ระบบ login
+รันไฟล์ `supabase/migrations/20261119_secure_login.sql` ใน SQL Editor หนึ่งครั้ง
 
 ### 3. รันโปรเจค
 
@@ -102,6 +109,8 @@ git push -u origin main
 3. เพิ่ม Environment Variables:
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `SESSION_SECRET`
 4. กด Deploy
 
 ---
@@ -166,13 +175,19 @@ git push -u origin main
 1. Login ด้วยบัญชี admin
 2. **แท็บสรุปข้อมูล:** ดูตาราง + กราฟการสูญเสีย
 3. **แท็บจัดการรุ่น:** สร้างรุ่นใหม่/ดูประวัติรุ่นเก่า
-4. **แท็บจัดการผู้ใช้:** ดูรายชื่อพนักงานทั้งหมด
+4. **แท็บจัดการผู้ใช้:** เพิ่มพนักงาน, ตั้ง PIN ใหม่ให้คนที่ลืมรหัส, ระงับ/เปิดใช้บัญชี
+
+### ระบบเข้าสู่ระบบ
+- พนักงานไม่ต้องสมัครหรือเปลี่ยนรหัสเอง แอดมินเป็นคนสร้างบัญชีและตั้ง PIN (ตัวเลข 4–6 หลัก) ให้
+- เข้าระบบครั้งเดียว เครื่องจะจำไว้ 90 วัน และต่ออายุให้เองทุกครั้งที่เปิดใช้
+- ใส่รหัสผิด 5 ครั้งติด บัญชีจะล็อก 15 นาที (หรือให้แอดมินกด "ตั้ง PIN ใหม่" เพื่อปลดล็อกทันที)
+- รหัสเดิมยังใช้ได้ ระบบจะเข้ารหัส (hash) ให้เองตอนที่ login ครั้งถัดไป
 
 ---
 
 ## ⚠️ ข้อควรระวัง
 
-1. **Security:** ในเวอร์ชันนี้ใช้การเข้ารหัสรหัสผ่านแบบง่าย สำหรับ production ควรใช้ Supabase Auth แบบเต็มรูปแบบ
+1. **Security:** รหัสผ่านตรวจที่เซิร์ฟเวอร์และเก็บแบบ hash (scrypt) แล้ว แต่ตารางข้อมูลฟาร์ม (`daily_records`, `batches` ฯลฯ) ยังเขียนผ่าน anon key จากหน้าเว็บโดยตรง ขั้นต่อไปควรย้ายการบันทึกเหล่านี้ไปทำผ่าน API ด้วย
 2. **RLS Policies:** ตรวจสอบว่า RLS policies ทำงานถูกต้อง
 3. **Backup:** สำรองข้อมูลใน Supabase เป็นประจำ
 

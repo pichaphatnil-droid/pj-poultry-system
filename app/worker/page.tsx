@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { getCurrentUser, signOut, supabase } from '../lib/supabase';
+import { refreshCurrentUser, signOut, supabase } from '../lib/supabase';
 import type { User, Batch, DailyRecord } from '../types';
 import { getTodayThailand, getNowThailand } from '../lib/dateUtils';
 
@@ -95,13 +95,20 @@ export default function WorkerDashboard() {
   const [afternoonCulled, setAfternoonCulled] = useState('');
 
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser || currentUser.role !== 'worker') {
-      router.push('/');
-      return;
-    }
-    setUser(currentUser);
-    loadActiveBatch(currentUser);
+    let cancelled = false;
+    (async () => {
+      const currentUser = await refreshCurrentUser();
+      if (cancelled) return;
+      if (!currentUser || currentUser.role !== 'worker') {
+        router.push('/');
+        return;
+      }
+      setUser(currentUser);
+      loadActiveBatch(currentUser);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [router]);
 
   useEffect(() => {
@@ -219,7 +226,7 @@ export default function WorkerDashboard() {
     }
   };
 
-  const handleLogout = () => { signOut(); router.push('/'); };
+  const handleLogout = async () => { await signOut(); router.push('/'); };
 
   if (loading) {
     return (

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { getCurrentUser, signOut, supabase } from "../lib/supabase";
+import { refreshCurrentUser, signOut, supabase } from "../lib/supabase";
+import UsersManager from "./UsersManager";
 import { getTodayThailand } from "../lib/dateUtils";
 import type { User, Batch, DailyRecord } from "../types";
 import { format, differenceInDays, addDays } from "date-fns";
@@ -308,13 +309,20 @@ export default function AdminDashboard() {
   ];
 
   useEffect(() => {
-    const currentUser = getCurrentUser();
-    if (!currentUser || currentUser.role !== "admin") {
-      router.push("/");
-      return;
-    }
-    setUser(currentUser);
-    loadData();
+    let cancelled = false;
+    (async () => {
+      const currentUser = await refreshCurrentUser();
+      if (cancelled) return;
+      if (!currentUser || currentUser.role !== "admin") {
+        router.push("/");
+        return;
+      }
+      setUser(currentUser);
+      loadData();
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
@@ -326,6 +334,16 @@ export default function AdminDashboard() {
       ),
     );
   }, [weightCalculatorHouse, weightCalculatorWeek, weightSessions]);
+
+  const loadUsers = async () => {
+    // เลือกเฉพาะคอลัมน์ที่เปิดให้อ่านได้ (password_hash ถูกปิดไว้ในฐานข้อมูล)
+    const { data: usersData } = await supabase
+      .from("users")
+      .select("id, username, full_name, role, house_number, is_active, created_at, updated_at")
+      .order("role", { ascending: false })
+      .order("house_number", { ascending: true });
+    setUsers((usersData as User[]) || []);
+  };
 
   const loadData = async () => {
     try {
@@ -414,12 +432,7 @@ export default function AdminDashboard() {
         }
       }
 
-      const { data: usersData } = await supabase
-        .from("users")
-        .select("*")
-        .order("role", { ascending: false })
-        .order("house_number", { ascending: true });
-      setUsers(usersData || []);
+      await loadUsers();
 
       const { data: logsData } = await supabase
         .from("activity_logs")
@@ -522,8 +535,8 @@ export default function AdminDashboard() {
     });
   };
 
-  const handleLogout = () => {
-    signOut();
+  const handleLogout = async () => {
+    await signOut();
     router.push("/");
   };
 
@@ -4763,66 +4776,11 @@ export default function AdminDashboard() {
         )}
 
         {activeTab === "users" && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-gray-800">
-                จัดการผู้ใช้
-              </h2>
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      ชื่อผู้ใช้
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      ชื่อ-นามสกุล
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      บทบาท
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      เล้า
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      สถานะ
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {users.map((u) => (
-                    <tr key={u.id}>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {u.username}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {u.full_name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {u.role === "admin" ? "ผู้ดูแลระบบ" : "พนักงาน"}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {u.house_number || "-"}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {u.is_active ? (
-                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                            ใช้งาน
-                          </span>
-                        ) : (
-                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                            ระงับ
-                          </span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <UsersManager
+            users={users}
+            currentUserId={user?.id ?? null}
+            onChanged={loadUsers}
+          />
         )}
       </main>
 

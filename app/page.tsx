@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signIn } from './lib/supabase';
+import { refreshCurrentUser, signIn } from './lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -10,6 +10,18 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // ถ้าเคย login ไว้แล้วบนเครื่องนี้ พาเข้าหน้าของตัวเองเลย ไม่ต้องกรอกรหัสซ้ำ
+  useEffect(() => {
+    let cancelled = false;
+    refreshCurrentUser().then((user) => {
+      if (cancelled || !user) return;
+      router.replace(user.role === 'admin' ? '/admin' : '/worker');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
