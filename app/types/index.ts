@@ -2,7 +2,7 @@ export interface User {
   id: string;
   username: string;
   full_name: string;
-  role: 'admin' | 'worker';
+  role: "admin" | "worker";
   house_number?: number;
   is_active: boolean;
   created_at: string;
@@ -13,10 +13,12 @@ export interface Batch {
   id: string;
   batch_name: string;
   start_date: string;
-  end_date?: string;
+  end_date?: string | null;
+  scheduled_end_date?: string | null;
+  closed_at?: string | null;
   initial_count: number;
   is_active: boolean;
-  created_by?: string;
+  created_by?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -26,7 +28,7 @@ export interface DailyRecord {
   batch_id: string;
   house_number: number;
   record_date: string;
-  
+
   morning_dead?: number;
   morning_culled?: number;
   morning_temp_outside?: number;
@@ -35,12 +37,12 @@ export interface DailyRecord {
   morning_water_meter?: number;
   morning_recorded_by?: string;
   morning_recorded_at?: string;
-  
+
   afternoon_dead?: number;
   afternoon_culled?: number;
   afternoon_recorded_by?: string;
   afternoon_recorded_at?: string;
-  
+
   created_at: string;
   updated_at: string;
 }

@@ -79,7 +79,7 @@ export default function LoginPage() {
           <form onSubmit={handleLogin} className="space-y-6">
             <div>
               <label htmlFor="username" className="block text-lg md:text-xl font-semibold text-gray-700 mb-3">
-                ชื่อผู้ใช้
+                ชื่อผู้ใช้ / ຊື່ຜູ້ໃຊ້
               </label>
               <input
                 id="username"
@@ -96,7 +96,7 @@ export default function LoginPage() {
 
             <div>
               <label htmlFor="password" className="block text-lg md:text-xl font-semibold text-gray-700 mb-3">
-                รหัสผ่าน
+                รหัสผ่าน / ລະຫັດຜ່ານ
               </label>
               <input
                 id="password"
