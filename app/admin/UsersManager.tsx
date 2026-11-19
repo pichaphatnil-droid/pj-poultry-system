@@ -36,6 +36,9 @@ export default function UsersManager({
   const [newPin, setNewPin] = useState("");
   const [resetUserId, setResetUserId] = useState<string | null>(null);
   const [resetPin, setResetPin] = useState("");
+  const [editUserId, setEditUserId] = useState<string | null>(null);
+  const [editFullName, setEditFullName] = useState("");
+  const [editHouse, setEditHouse] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "error"; text: string } | null>(
     null,
@@ -78,6 +81,24 @@ export default function UsersManager({
       setResetPin("");
     }, `ตั้ง PIN ใหม่ให้ ${u.full_name} แล้ว — PIN ใหม่: ${resetPin}`);
 
+  const startEdit = (u: User) => {
+    setResetUserId(null);
+    setEditUserId(u.id);
+    setEditFullName(u.full_name);
+    setEditHouse(u.house_number ? String(u.house_number) : "");
+    setMessage(null);
+  };
+
+  const handleSaveEdit = (u: User) =>
+    run(async () => {
+      await callUsersApi("PATCH", {
+        id: u.id,
+        full_name: editFullName,
+        ...(u.role === "worker" ? { house_number: editHouse } : {}),
+      });
+      setEditUserId(null);
+    }, `บันทึกข้อมูล ${editFullName} แล้ว`);
+
   const handleToggleActive = (u: User) => {
     if (
       u.is_active &&
@@ -101,6 +122,10 @@ export default function UsersManager({
           <h2 className="text-xl font-semibold text-gray-800">จัดการผู้ใช้</h2>
           <p className="text-sm text-gray-500 mt-1">
             พนักงานลืมรหัส? กด &quot;ตั้ง PIN ใหม่&quot; แล้วบอก PIN ใหม่ให้พนักงาน
+          </p>
+          <p className="text-sm text-gray-500">
+            เปลี่ยนคนดูแลเล้า? กด &quot;ระงับ&quot; บัญชีคนเก่า แล้ว &quot;+ เพิ่มพนักงาน&quot; ให้คนใหม่
+            (ประวัติการบันทึกของคนเก่าจะยังอยู่ครบ)
           </p>
         </div>
         <button
@@ -207,13 +232,36 @@ export default function UsersManager({
                   {u.username}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {u.full_name}
+                  {editUserId === u.id ? (
+                    <input
+                      value={editFullName}
+                      onChange={(e) => setEditFullName(e.target.value)}
+                      className="w-48 rounded-lg border border-gray-300 px-2 py-1"
+                      autoFocus
+                    />
+                  ) : (
+                    u.full_name
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   {u.role === "admin" ? "ผู้ดูแลระบบ" : "พนักงาน"}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {u.house_number || "-"}
+                  {editUserId === u.id && u.role === "worker" ? (
+                    <select
+                      value={editHouse}
+                      onChange={(e) => setEditHouse(e.target.value)}
+                      className="rounded-lg border border-gray-300 px-2 py-1"
+                    >
+                      {HOUSES.map((h) => (
+                        <option key={h} value={h}>
+                          เล้า {h}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    u.house_number || "-"
+                  )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   {u.is_active ? (
@@ -227,7 +275,23 @@ export default function UsersManager({
                   )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
-                  {resetUserId === u.id ? (
+                  {editUserId === u.id ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleSaveEdit(u)}
+                        disabled={busy || !editFullName.trim()}
+                        className="px-3 py-1 bg-blue-600 text-white rounded-lg font-semibold disabled:opacity-50"
+                      >
+                        บันทึก
+                      </button>
+                      <button
+                        onClick={() => setEditUserId(null)}
+                        className="px-3 py-1 text-gray-600"
+                      >
+                        ยกเลิก
+                      </button>
+                    </div>
+                  ) : resetUserId === u.id ? (
                     <div className="flex items-center gap-2">
                       <input
                         value={resetPin}
@@ -257,7 +321,14 @@ export default function UsersManager({
                   ) : (
                     <div className="flex items-center gap-2">
                       <button
+                        onClick={() => startEdit(u)}
+                        className="px-3 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg font-semibold"
+                      >
+                        แก้ไข
+                      </button>
+                      <button
                         onClick={() => {
+                          setEditUserId(null);
                           setResetUserId(u.id);
                           setResetPin("");
                           setMessage(null);
