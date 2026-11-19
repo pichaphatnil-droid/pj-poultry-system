@@ -2,12 +2,17 @@
 
 import { getTodayThailand } from "../lib/dateUtils";
 import { differenceInDays } from "date-fns";
-import { ChickenSex, HouseDetailInput, HOUSE_NUMBERS, WEEKLY_WEIGHT_FIELDS } from "./shared";
+import { ChickenSex, HouseDetailInput, HOUSE_NUMBERS, WEEKLY_WEIGHT_FIELDS, bangkokClock, timeToMinutes } from "./shared";
 import type { AdminState } from "./useAdminState";
 
 // ค่าที่คำนวณจาก state เพื่อแสดงผล (เรียกหลังโหลดข้อมูลเสร็จ)
 export function deriveAdminView(state: AdminState) {
   const {
+    farmSettings,
+    activeBatch,
+    viewingBatch: viewedBatch,
+    records: viewedRecords,
+    users: allUsers,
     HOUSE_AREAS,
     WEIGHT_STANDARDS,
     allBatches,
@@ -361,7 +366,55 @@ export function deriveAdminView(state: AdminState) {
     );
   };
 
+  // แจ้งเตือนในหน้าแอดมิน: เล้าที่ยังไม่บันทึกวันนี้ (เมื่อเลยเวลาที่ตั้งไว้)
+  const recordAlerts = (() => {
+    const alerts = farmSettings.alerts;
+    if (!alerts.enabled || !activeBatch || viewedBatch?.id !== activeBatch.id) return [];
+    const clock = bangkokClock();
+    const today = clock.date;
+    if (today < activeBatch.start_date) return [];
+
+    const profiles = Object.values(housePerformanceData);
+    let expected = profiles
+      .filter(
+        (p) =>
+          p.initial_count > 0 &&
+          (!p.arrival_date || p.arrival_date <= today) &&
+          (!p.capture_date || p.capture_date > today),
+      )
+      .map((p) => Number(p.house_number));
+    if (profiles.length === 0) {
+      expected = [
+        ...new Set(
+          allUsers
+            .filter((u) => u.role === "worker" && u.is_active && u.house_number)
+            .map((u) => Number(u.house_number)),
+        ),
+      ];
+    }
+
+    const result: { period: "morning" | "afternoon"; label: string; houses: number[] }[] = [];
+    const periods = [
+      ["morning", "ช่วงเช้า", alerts.morningEnabled, alerts.morningTime, "morning_recorded_at"],
+      ["afternoon", "ช่วงบ่าย", alerts.afternoonEnabled, alerts.afternoonTime, "afternoon_recorded_at"],
+    ] as const;
+    for (const [period, label, on, time, field] of periods) {
+      if (!on || clock.minutes < timeToMinutes(time)) continue;
+      const houses = expected
+        .filter(
+          (h) =>
+            !viewedRecords.some(
+              (r) => r.house_number === h && r.record_date === today && r[field],
+            ),
+        )
+        .sort((a, b) => a - b);
+      if (houses.length) result.push({ period, label, houses });
+    }
+    return result;
+  })();
+
   return {
+    recordAlerts,
     dailySummary,
     todayDate,
     calendarStartOffset,

@@ -5,10 +5,12 @@ import {
   CHICKEN_SEX_LABELS,
   DEFAULT_FARM_SETTINGS,
   HOUSE_NUMBERS,
+  type AlertSettings,
   type ChickenSex,
   type FarmSettings,
 } from "../shared";
 import { useAdmin } from "../AdminContext";
+import AlertsPanel from "./AlertsPanel";
 
 const WEEKS = [1, 2, 3, 4, 5, 6];
 const SEXES = Object.keys(CHICKEN_SEX_LABELS) as ChickenSex[];
@@ -19,6 +21,7 @@ type Form = {
   houseAreas: Record<number, string>;
   weightStandards: Record<ChickenSex, string[]>;
   bonusTiers: { minMultiple: string; amount: string }[];
+  alerts: AlertSettings;
 };
 
 const toForm = (s: FarmSettings): Form => ({
@@ -33,6 +36,7 @@ const toForm = (s: FarmSettings): Form => ({
     minMultiple: String(t.minMultiple),
     amount: String(t.amount),
   })),
+  alerts: { ...s.alerts },
 });
 
 const num = (value: string) => {
@@ -60,6 +64,7 @@ export default function SettingsTab() {
       bonusTiers: form.bonusTiers
         .filter((t) => t.minMultiple.trim() || t.amount.trim())
         .map((t) => ({ minMultiple: num(t.minMultiple), amount: num(t.amount) })),
+      alerts: form.alerts,
     };
 
     const all = [
@@ -90,6 +95,8 @@ export default function SettingsTab() {
         [sex]: f.weightStandards[sex].map((x, j) => (j === i ? v : x)),
       },
     }));
+  const setAlert = <K extends keyof AlertSettings>(key: K, value: AlertSettings[K]) =>
+    setForm((f) => ({ ...f, alerts: { ...f.alerts, [key]: value } }));
   const setTier = (i: number, key: "minMultiple" | "amount", v: string) =>
     setForm((f) => ({
       ...f,
@@ -224,6 +231,65 @@ export default function SettingsTab() {
             + เพิ่มขั้นโบนัส
           </button>
         </div>
+      </section>
+
+      {/* การแจ้งเตือน */}
+      <section className="bg-white rounded-lg shadow-sm p-5 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="font-semibold text-gray-800">การแจ้งเตือนเล้าที่ยังไม่บันทึก</h3>
+            <p className="text-sm text-gray-500">
+              ถึงเวลาที่ตั้งไว้แล้ว ถ้าเล้าไหนยังไม่กรอกข้อมูล จะแจ้งเตือนในหน้าแอดมิน และส่ง LINE (ถ้าเชื่อมต่อไว้)
+            </p>
+          </div>
+          <label className="flex items-center gap-2 whitespace-nowrap font-semibold text-gray-700">
+            <input
+              type="checkbox"
+              checked={form.alerts.enabled}
+              onChange={(e) => setAlert("enabled", e.target.checked)}
+              className="h-5 w-5"
+            />
+            {form.alerts.enabled ? "เปิดอยู่" : "ปิดอยู่"}
+          </label>
+        </div>
+
+        <div className={`grid gap-3 sm:grid-cols-2 ${form.alerts.enabled ? "" : "opacity-50"}`}>
+          {(
+            [
+              ["morning", "ช่วงเช้า", "morningEnabled", "morningTime"],
+              ["afternoon", "ช่วงบ่าย", "afternoonEnabled", "afternoonTime"],
+            ] as const
+          ).map(([key, label, enabledKey, timeKey]) => (
+            <div key={key} className="rounded-lg border border-gray-200 p-3">
+              <label className="flex items-center gap-2 font-medium text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={form.alerts[enabledKey]}
+                  disabled={!form.alerts.enabled}
+                  onChange={(e) => setAlert(enabledKey, e.target.checked)}
+                  className="h-4 w-4"
+                />
+                แจ้งเตือน{label}
+              </label>
+              <label className="mt-2 flex items-center gap-2 text-sm text-gray-600">
+                ถ้ายังไม่บันทึกภายใน
+                <input
+                  type="time"
+                  value={form.alerts[timeKey]}
+                  disabled={!form.alerts.enabled || !form.alerts[enabledKey]}
+                  onChange={(e) => e.target.value && setAlert(timeKey, e.target.value)}
+                  className="rounded-lg border border-gray-300 px-2 py-1"
+                />
+                น.
+              </label>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-gray-500">
+          เปิด/ปิด และเวลา มีผลหลังกด &quot;บันทึก&quot; ด้านล่าง · ระบบเช็กทุก 15 นาที จึงอาจช้ากว่าเวลาที่ตั้งได้ไม่เกิน 15 นาที
+        </p>
+
+        <AlertsPanel />
       </section>
 
       {error && (

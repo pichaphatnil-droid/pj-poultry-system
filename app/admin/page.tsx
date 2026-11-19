@@ -36,6 +36,7 @@ export default function AdminDashboard() {
     loadUsers,
     handleLogout,
     viewingBatch,
+    recordAlerts,
   } = admin;
 
   return (
@@ -147,6 +148,18 @@ export default function AdminDashboard() {
           </div>
         </div>
   
+        {recordAlerts.length > 0 && (
+          <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+            <div className="rounded-lg border-2 border-amber-300 bg-amber-50 px-4 py-3 text-amber-900">
+              {recordAlerts.map((a) => (
+                <p key={a.period} className="font-semibold">
+                  ⚠️ ยังไม่บันทึก{a.label}วันนี้: เล้า {a.houses.join(", ")}
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+
         <main className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {activeTab === "summary" && viewingBatch && <SummaryTab />}
   

@@ -73,6 +73,13 @@ SESSION_SECRET=ข้อความสุ่มยาวอย่างน้�
   - `20261119_house_pins.sql` — รหัสประจำเล้า
   - `20261120_farm_settings.sql` — หน้าตั้งค่าฟาร์ม
   - `20261120_lock_down_tables.sql` — ปิดสิทธิ์กุญแจสาธารณะ (**รันหลัง deploy โค้ดใหม่เสร็จแล้วเท่านั้น**)
+  - `20261120_record_alerts.sql` — ตารางแจ้งเตือนเล้าที่ยังไม่บันทึก
+  - `20261120_record_alerts_cron.sql` — ตั้งเวลาเช็กทุก 15 นาที (แก้ที่อยู่เว็บและ CRON_SECRET ในไฟล์ก่อนรัน)
+
+#### 2.5 แจ้งเตือนทาง LINE (ไม่บังคับ)
+ตั้ง Environment Variables เพิ่ม: `LINE_CHANNEL_ACCESS_TOKEN`, `LINE_CHANNEL_SECRET`, `CRON_SECRET`
+แล้วตั้ง Webhook URL ใน LINE Developers เป็น `https://<เว็บของคุณ>/api/line/webhook`
+ถ้าไม่ตั้ง LINE แจ้งเตือนจะขึ้นเฉพาะในหน้าแอดมิน
 
 ### 3. รันโปรเจค
 

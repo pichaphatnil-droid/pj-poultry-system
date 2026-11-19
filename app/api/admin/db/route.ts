@@ -12,6 +12,7 @@ const WRITABLE_TABLES = new Set([
   "batch_house_weight_sessions",
   "activity_logs",
   "farm_settings",
+  "line_recipients",
 ]);
 const READ_ONLY_TABLES = new Set(["users"]);
 const ALLOWED_RPC = new Set(["close_scheduled_batches"]);

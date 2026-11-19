@@ -211,6 +211,28 @@ CREATE TABLE farm_settings (
 );
 
 -- ============================================
+-- 9. แจ้งเตือนเล้าที่ยังไม่บันทึก (LINE)
+-- ============================================
+CREATE TABLE line_recipients (
+  id TEXT PRIMARY KEY,                       -- LINE userId / groupId / roomId
+  kind TEXT NOT NULL CHECK (kind IN ('user', 'group', 'room')),
+  name TEXT,
+  enabled BOOLEAN NOT NULL DEFAULT false,    -- แอดมินต้องกดเปิดรับก่อน
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE alert_log (
+  alert_date DATE NOT NULL,
+  period TEXT NOT NULL CHECK (period IN ('morning', 'afternoon')),
+  missing_houses INTEGER[] NOT NULL DEFAULT '{}',
+  sent_to INTEGER NOT NULL DEFAULT 0,
+  error TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (alert_date, period)
+);
+-- ตัวตั้งเวลาเรียกเช็กทุก 15 นาที: ดู supabase/migrations/20261120_record_alerts_cron.sql
+
+-- ============================================
 -- Views
 -- ============================================
 CREATE OR REPLACE VIEW daily_summary AS
@@ -270,9 +292,11 @@ ALTER TABLE batch_house_counts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE batch_house_weight_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE house_pins ENABLE ROW LEVEL SECURITY;
 ALTER TABLE farm_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE line_recipients ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alert_log ENABLE ROW LEVEL SECURITY;
 
 REVOKE ALL ON users, batches, daily_records, activity_logs, batch_house_counts,
-  batch_house_weight_sessions, house_pins, farm_settings
+  batch_house_weight_sessions, house_pins, farm_settings, line_recipients, alert_log
   FROM anon, authenticated;
 REVOKE ALL ON daily_summary, cumulative_loss FROM anon, authenticated;
 
