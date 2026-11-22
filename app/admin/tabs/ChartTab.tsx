@@ -1,6 +1,7 @@
 "use client";
 
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import ExportMenu from "../components/ExportMenu";
 import { useAdmin } from "../AdminContext";
 
 export default function ChartTab() {
@@ -30,14 +31,17 @@ export default function ChartTab() {
                 )}
               </h2>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <button
-                  type="button"
-                  onClick={handleExportChartImage}
-                  disabled={exportingChartImage || recordsLoading}
-                  className="rounded-lg bg-green-600 px-4 py-2 font-bold text-white transition hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {exportingChartImage ? "กำลังสร้างภาพ..." : "Export กราฟเป็น PNG"}
-                </button>
+                <ExportMenu
+                  options={[
+                    {
+                      icon: "🖼️",
+                      label: "รูปกราฟ (PNG)",
+                      onClick: handleExportChartImage,
+                      disabled: recordsLoading,
+                      busy: exportingChartImage,
+                    },
+                  ]}
+                />
                 <span className="text-sm font-semibold text-blue-900">
                   เลือกรุ่น:
                 </span>

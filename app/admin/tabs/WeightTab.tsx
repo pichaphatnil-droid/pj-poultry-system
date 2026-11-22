@@ -2,6 +2,7 @@
 
 import { th } from "date-fns/locale";
 import { HOUSE_NUMBERS, WEEKLY_WEIGHT_FIELDS, WEIGHING_POSITIONS, WEIGHT_SUMMARY_CARD_CLASSES } from "../shared";
+import ExportMenu from "../components/ExportMenu";
 import { useAdmin } from "../AdminContext";
 
 export default function WeightTab() {
@@ -380,17 +381,16 @@ export default function WeightTab() {
                     ADG = (น้ำหนักสัปดาห์ปัจจุบัน − น้ำหนักสัปดาห์ก่อน) ÷ 7
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleExportGrowthTableImage}
-                  disabled={exportingGrowthTable}
-                  data-html2canvas-ignore="true"
-                  className="shrink-0 rounded-xl bg-orange-500 px-5 py-3 font-bold text-white shadow-sm transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {exportingGrowthTable
-                    ? "กำลัง Export..."
-                    : "Export ตารางเป็น PNG"}
-                </button>
+                <ExportMenu
+                  options={[
+                    {
+                      icon: "🖼️",
+                      label: "รูปตารางการเจริญเติบโต (PNG)",
+                      onClick: handleExportGrowthTableImage,
+                      busy: exportingGrowthTable,
+                    },
+                  ]}
+                />
               </div>
               <div className="overflow-x-auto" data-growth-export-scroll>
                 <table className="min-w-[2300px] w-full text-xs">

@@ -6,6 +6,7 @@ import { format, differenceInDays } from "date-fns";
 import { th } from "date-fns/locale";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { HouseChartMetric } from "../shared";
+import ExportMenu from "../components/ExportMenu";
 import { useAdmin } from "../AdminContext";
 
 export default function SummaryTab() {
@@ -809,23 +810,23 @@ export default function SummaryTab() {
                       </button>
                     </div>
 
-                    <button
-                      onClick={handleExportLegacyTableExcel}
-                      disabled={exportingLegacyExcel || recordsLoading}
-                      className="px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold shadow-sm transition"
-                      type="button"
-                    >
-                      {exportingLegacyExcel ? "กำลัง Export Excel..." : "Export Excel (.xlsx)"}
-                    </button>
-
-                    <button
-                      onClick={handleExportLegacyTableImage}
-                      disabled={exportingLegacyTable}
-                      className="px-4 py-3 bg-green-600 hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold shadow-sm transition"
-                      type="button"
-                    >
-                      {exportingLegacyTable ? "กำลัง Export..." : "Export เป็นภาพ PNG"}
-                    </button>
+                    <ExportMenu
+                      options={[
+                        {
+                          icon: "📊",
+                          label: "ไฟล์ Excel (.xlsx)",
+                          onClick: handleExportLegacyTableExcel,
+                          disabled: recordsLoading,
+                          busy: exportingLegacyExcel,
+                        },
+                        {
+                          icon: "🖼️",
+                          label: "รูปตาราง (PNG)",
+                          onClick: handleExportLegacyTableImage,
+                          busy: exportingLegacyTable,
+                        },
+                      ]}
+                    />
                   </div>
                 </div>
               </div>

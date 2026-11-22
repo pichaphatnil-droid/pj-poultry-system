@@ -3,6 +3,7 @@
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
 import { ChickenSex, WEEKLY_WEIGHT_FIELDS, calculateBonus } from "../shared";
+import ExportMenu from "../components/ExportMenu";
 import { useAdmin } from "../AdminContext";
 
 export default function WeeklyTab() {
@@ -51,17 +52,17 @@ export default function WeeklyTab() {
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <BatchSelector />
-                  <button
-                    type="button"
-                    onClick={handleExportWeeklyPerformanceImage}
-                    disabled={exportingWeeklyPerformance}
-                    data-html2canvas-ignore="true"
-                    className="rounded-xl bg-white px-4 py-3 font-bold text-purple-700 shadow-sm transition hover:bg-purple-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {exportingWeeklyPerformance
-                      ? "กำลัง Export..."
-                      : "Export ทั้งหน้าเป็น PNG"}
-                  </button>
+                  <ExportMenu
+                    tone="onColor"
+                    options={[
+                      {
+                        icon: "🖼️",
+                        label: "รูปทั้งหน้า (PNG)",
+                        onClick: handleExportWeeklyPerformanceImage,
+                        busy: exportingWeeklyPerformance,
+                      },
+                    ]}
+                  />
                 </div>
               </div>
             </div>
